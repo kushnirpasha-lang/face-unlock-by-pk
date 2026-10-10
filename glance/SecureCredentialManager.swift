@@ -2,7 +2,7 @@
 //  SecureCredentialManager.swift
 //  glance
 //
-//  Two-tier storage on KeychainManager: a Touch-ID-gated session key (unwrapped once per launch) wraps an ungated encrypted
+//  Two-tier storage on SecretVault: a Touch-ID-gated session key (unwrapped once per launch) wraps an ungated encrypted
 //  password blob, safe to read anytime — including the lock screen, where no app UI exists to host a Touch ID prompt.
 //  Touch ID authorizes the session; nothing yet authorizes each individual unlock beyond that (face recognition will).
 //
@@ -42,8 +42,6 @@ extension Notification.Name {
 }
 
 enum SecureCredentialManager {
-    nonisolated private static let sessionKeyAccount = "sessionKey"
-    nonisolated private static let passwordBlobAccount = "encryptedPassword"
 
     // MARK: - Session state (thread-safe via NSLock)
 
@@ -113,52 +111,34 @@ enum SecureCredentialManager {
 
     // MARK: - Public API
 
-    nonisolated static func hasStoredPassword() -> Bool {
-        KeychainManager.exists(account: passwordBlobAccount)
+    /// The encrypted password lives in a file next to the vault (AES-GCM under the session key), not in the Keychain:
+    /// the Keychain path Glance used needs a paid Team ID for its access control (see SecretVault).
+    nonisolated private static var passwordFileURL: URL {
+        SecretVault.directory.appendingPathComponent("password.enc")
     }
 
-    /// Prompts Touch ID and unwraps the session key, creating it Touch-ID-gated on first run. Caches only after a real gated
-    /// read-back succeeds — `SecItemAdd` alone returns success even if the user hit Cancel on the auth UI, and bridging
-    /// `LAContext.evaluatePolicy` synchronously via a semaphore deadlocks the thread pool and crashes the process.
-    /// Must succeed before `savePassword`/`readPassword`. Blocking; call from a background task.
+    nonisolated static func hasStoredPassword() -> Bool {
+        FileManager.default.fileExists(atPath: passwordFileURL.path)
+    }
+
+    nonisolated static var vaultBackend: VaultBackend? { SecretVault.backend }
+
     nonisolated static func unlockSession(reason: String) throws {
         if cachedKey() != nil { return }
-
-        // The existence check, not the read, decides whether a key gets created (load-bearing): a cancelled Touch ID prompt on
-        // a user-presence item reports `errSecItemNotFound`, indistinguishable from no key — deciding on the read's error would
-        // mint a fresh key (destroying the one that decrypts existing data) on every mis-tap.
-        if KeychainManager.exists(account: sessionKeyAccount) {
-            let context = LAContext()
-            context.localizedReason = reason
-            let data = try KeychainManager.read(account: sessionKeyAccount, context: context)
-            setCachedKey(SymmetricKey(data: data))
+        // Existence decides, not a failed read: a cancelled Touch ID prompt must never mint a fresh key that would orphan
+        // the data already encrypted under the old one.
+        if SecretVault.exists {
+            setCachedKey(try SecretVault.open(reason: reason))
             return
         }
-
-        // No key at all, but minting one is still destructive if data is already encrypted under a previous key (e.g. a
-        // re-signed dev build) — refuse rather than silently render it unreadable forever.
         guard !hasSessionEncryptedData else {
             throw SecureCredentialError.sessionKeyUnavailable
         }
-
-        let key = SymmetricKey(size: .bits256)
-        let access = try KeychainManager.makeUserPresenceAccessControl()
-        try KeychainManager.save(
-            account: sessionKeyAccount,
-            data: key.withUnsafeBytes { Data($0) },
-            accessControl: access
-        )
-
-        // Read back through the gated path rather than trusting the write — only a real read proves authentication happened.
-        let readBackContext = LAContext()
-        readBackContext.localizedReason = reason
-        let data = try KeychainManager.read(account: sessionKeyAccount, context: readBackContext)
-        setCachedKey(SymmetricKey(data: data))
+        setCachedKey(try SecretVault.create(reason: reason))
     }
 
-    /// Checked without needing the key itself, so this stays answerable precisely when the key can't be read.
     nonisolated static var hasSessionEncryptedData: Bool {
-        KeychainManager.exists(account: passwordBlobAccount) || SecureFaceStore.exists
+        hasStoredPassword() || SecureFaceStore.exists
     }
 
     /// Clears the cached session key. Next save/read requires Touch ID again.
@@ -171,14 +151,15 @@ enum SecureCredentialManager {
     nonisolated static func savePassword(_ passwordBytes: Data) throws {
         guard !passwordBytes.isEmpty else { throw SecureCredentialError.emptyPassword }
         let combined = try encrypt(passwordBytes)
-        try KeychainManager.save(account: passwordBlobAccount, data: combined)
+        try combined.write(to: passwordFileURL, options: [.atomic])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: passwordFileURL.path)
     }
 
     /// No separate Touch ID prompt — only the session key was gated, at unlock time. Caller MUST zero the returned bytes via
     /// `.resetBytes(in:)` after use. Blocking; call from a background task.
     nonisolated static func readPassword() throws -> Data {
         guard cachedKey() != nil else { throw SecureCredentialError.sessionLocked }
-        let ciphertext = try KeychainManager.read(account: passwordBlobAccount)
+        let ciphertext = try Data(contentsOf: passwordFileURL)
         let plaintext = try decrypt(ciphertext)
         // Only on success: a failed read shouldn't extend the idle window.
         recordActivity()
@@ -187,8 +168,8 @@ enum SecureCredentialManager {
 
     /// Deletes both Keychain items and clears the cached session key.
     nonisolated static func deletePassword() throws {
-        try KeychainManager.delete(account: passwordBlobAccount)
-        try KeychainManager.delete(account: sessionKeyAccount)
+        try? FileManager.default.removeItem(at: passwordFileURL)
+        SecretVault.destroy()
         setCachedKey(nil)
     }
 }
