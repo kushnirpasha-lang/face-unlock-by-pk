@@ -32,6 +32,10 @@ nonisolated final class InputActivityMonitor: @unchecked Sendable {
     @MainActor
     func start() {
         guard manager == nil else { return }
+        // Ask macOS once for "Input Monitoring" (a system dialog). Without it the guard is blind and never types.
+        if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
+            _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        }
         let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         let matches: [[String: Int]] = [
             [kIOHIDDeviceUsagePageKey: kHIDPage_GenericDesktop, kIOHIDDeviceUsageKey: kHIDUsage_GD_Keyboard],
