@@ -16,6 +16,8 @@ nonisolated struct FaceRecognitionResult {
     let alignmentTier: AlignmentTier
     let quality: Float?
     let face: DetectedFace
+    /// Faces in the frame big enough to be "a person at this Mac" (Face ID for Mac refuses to unlock with two).
+    var prominentFaceCount: Int = 1
 }
 
 nonisolated enum FaceRecognitionPipelineError: LocalizedError {
@@ -59,7 +61,9 @@ final class FaceRecognitionPipeline {
         guard let face = Self.selectDominantFace(in: faces, preferNear: previousBoundingBox) else {
             throw FaceRecognitionPipelineError.noFaceDetected
         }
-        return try recognize(face, in: frame)
+        var result = try recognize(face, in: frame)
+        result.prominentFaceCount = faces.filter { $0.normalizedBoundingBox.width >= CGFloat(Self.minimumProminentFaceWidth) }.count
+        return result
     }
 
     /// Aligns and embeds an already-chosen face; enrollment uses this to bypass the prominence filter so a too-small face reads as "move closer" rather than "nobody there".

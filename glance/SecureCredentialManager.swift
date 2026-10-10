@@ -153,6 +153,7 @@ enum SecureCredentialManager {
         let combined = try encrypt(passwordBytes)
         try combined.write(to: passwordFileURL, options: [.atomic])
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: passwordFileURL.path)
+        NotificationCenter.default.post(name: .secureCredentialPasswordSaved, object: nil)
     }
 
     /// No separate Touch ID prompt — only the session key was gated, at unlock time. Caller MUST zero the returned bytes via

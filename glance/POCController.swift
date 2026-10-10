@@ -38,7 +38,7 @@ final class POCController {
 
     // MARK: - Session (Touch ID gate)
 
-    /// Must succeed before `savePassword()` or `injectStoredPassword()` will do anything.
+    /// Must succeed before `savePassword()` will do anything.
     func unlockSession() async {
         sessionError = nil
         do {
@@ -84,39 +84,6 @@ final class POCController {
         }
     }
 
-    // MARK: - Injection
-
-    /// Reads + decrypts + injects the stored password, zeroing the plaintext
-    /// buffer before returning. When `requireAuthoritativeLock` is true (the
-    /// auto-trigger path), refuses to inject unless the CGSession dictionary
-    /// confirms the screen is actually locked.
-    func injectStoredPassword(requireAuthoritativeLock: Bool = false) async {
-        guard KeystrokeInjector.isAccessibilityTrusted() else {
-            statusMessage = "Accessibility not granted — open System Settings and enable glance."
-            return
-        }
-        guard SecureCredentialManager.isSessionUnlocked else {
-            statusMessage = "Session locked — authenticate with Touch ID first."
-            return
-        }
-
-        if requireAuthoritativeLock {
-            guard LockMonitor.isScreenActuallyLocked() else {
-                statusMessage = "Skipped: CGSession reports screen is not actually locked."
-                return
-            }
-        }
-
-        statusMessage = "Injecting…"
-        do {
-            try await Task.detached(priority: .userInitiated) {
-                var bytes = try SecureCredentialManager.readPassword()
-                defer { bytes.resetBytes(in: 0..<bytes.count) }
-                try KeystrokeInjector.typeAndReturn(bytes)
-            }.value
-            statusMessage = "Injected stored password + Return at \(Date().formatted(date: .omitted, time: .standard))"
-        } catch {
-            statusMessage = "Injection failed: \(error.localizedDescription)"
-        }
-    }
+    // Injection lives in FaceUnlockCoordinator + PasswordTyper (Face ID for Mac): there is no other code path that can
+    // type the password, so nothing outside the guarded lock-screen flow can ever send it anywhere.
 }

@@ -151,7 +151,7 @@ private enum MatchConfidenceLevel: Int, CaseIterable {
     var threshold: Float {
         switch self {
         case .lessStrict: return 0.58
-        case .standard: return 0.63
+        case .standard: return 0.66   // Face ID for Mac: matches the stored default (Glance showed 0.63 here)
         case .moreStrict: return 0.68
         }
     }

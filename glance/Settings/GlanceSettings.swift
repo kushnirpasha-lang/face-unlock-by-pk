@@ -69,8 +69,8 @@ enum UnlockAnimationStyle: String, CaseIterable, Identifiable {
 enum UnlockTrigger: String, CaseIterable, Identifiable {
     /// The display turned back on (see `LockEventKind.wake`).
     case onWake
-    /// The screen just became locked, no wake involved.
-    case onLock
+    // `onLock` was removed on purpose (Face ID for Mac, A1): scanning the instant the screen locks re-opens the Mac
+    // for whoever is still sitting in front of it when the owner locks and walks away.
     /// Pressing space on the lock screen starts a scan. The lock screen's
     /// Secure Event Input blocks normal event taps, so this is detected via
     /// IOKit HID instead (see `SpaceKeyMonitor`), requiring Input Monitoring.
@@ -81,7 +81,6 @@ enum UnlockTrigger: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .onWake: return "On wake"
-        case .onLock: return "On lock"
         case .onSpace: return "On space"
         }
     }
@@ -89,7 +88,6 @@ enum UnlockTrigger: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .onWake: return "moon.fill"
-        case .onLock: return "lock.laptopcomputer"
         case .onSpace: return "space"
         }
     }
@@ -114,6 +112,8 @@ final class GlanceSettings {
         static let retryOnHover = "GlanceSettings.retryOnHover"
         static let faceDetectionSeconds = "GlanceSettings.faceDetectionSeconds"
         static let autoRetryOnce = "GlanceSettings.autoRetryOnce"
+        static let maxFailedAttempts = "FaceIDforMac.maxFailedAttempts"
+        static let notifyOnPause = "FaceIDforMac.notifyOnPause"
         static let hapticFeedbackEnabled = "GlanceSettings.hapticFeedbackEnabled"
         static let showsInMenuBar = "GlanceSettings.showsInMenuBar"
         static let preferredDisplayID = "GlanceSettings.preferredDisplayID"
@@ -205,6 +205,16 @@ final class GlanceSettings {
             defaults.set(faceDetectionSeconds, forKey: Key.faceDetectionSeconds)
         }
     }
+    /// Failed face attempts per lock before the camera goes quiet until the Mac is unlocked another way.
+    var maxFailedAttempts: Int {
+        didSet { defaults.set(maxFailedAttempts, forKey: Key.maxFailedAttempts) }
+    }
+
+    /// One system notification (after the owner is back in) when face unlock goes into a pause.
+    var notifyOnPause: Bool {
+        didSet { defaults.set(notifyOnPause, forKey: Key.notifyOnPause) }
+    }
+
     var autoRetryOnce: Bool {
         didSet { defaults.set(autoRetryOnce, forKey: Key.autoRetryOnce) }
     }
@@ -293,7 +303,7 @@ final class GlanceSettings {
         // still, non-blinking user may never produce, while Light still
         // catches the main attack (a photo on a phone screen).
         livenessMode = defaults.string(forKey: Key.livenessMode)
-            .flatMap(LivenessMode.init(rawValue:)) ?? .light
+            .flatMap(LivenessMode.init(rawValue:)) ?? .heavy
         // Matches `DetectionDistanceLevel.standard` — see RecognitionSettingsPage.swift.
         minimumFaceWidth = defaults.object(forKey: Key.minimumFaceWidth) as? Float ?? 0.21
 
@@ -312,8 +322,8 @@ final class GlanceSettings {
         // A stored `.none` becomes "off, remembering .original" so
         // switching back on has something to restore.
         unlockAnimationStyle = storedStyle == .none ? .original : storedStyle
-        showUnlockAnimation = defaults.object(forKey: Key.showUnlockAnimation) as? Bool
-            ?? (storedStyle != .none)
+        // Face ID for Mac v1 runs headless on the lock screen (A14): no window there, nothing to hover.
+        showUnlockAnimation = defaults.object(forKey: Key.showUnlockAnimation) as? Bool ?? false
 
         // On wake/lock by default, not on space — `.onSpace` needs Input
         // Monitoring, which a fresh install shouldn't request unprompted.
@@ -324,22 +334,26 @@ final class GlanceSettings {
                 return UnlockTrigger(rawValue: raw)
             }
         unlockTriggers = storedTriggers.map(Set.init).flatMap { $0.isEmpty ? nil : $0 }
-            ?? [.onWake, .onLock]
-        retryOnHover = defaults.object(forKey: Key.retryOnHover) as? Bool ?? true
+            ?? [.onWake, .onSpace]
+        retryOnHover = defaults.object(forKey: Key.retryOnHover) as? Bool ?? false
         faceDetectionSeconds = (defaults.object(forKey: Key.faceDetectionSeconds) as? Int)
             .map { min(max($0, Self.faceDetectionRange.lowerBound), Self.faceDetectionRange.upperBound) }
             ?? 5
-        autoRetryOnce = defaults.object(forKey: Key.autoRetryOnce) as? Bool ?? false
+        // Never: an automatic retry is an attempt the owner didn't ask for (A6).
+        autoRetryOnce = false
+        maxFailedAttempts = min(5, max(1, defaults.object(forKey: Key.maxFailedAttempts) as? Int ?? 3))
+        notifyOnPause = defaults.object(forKey: Key.notifyOnPause) as? Bool ?? true
         hapticFeedbackEnabled = defaults.object(forKey: Key.hapticFeedbackEnabled) as? Bool ?? true
         // Keep the icon available for existing and new installs unless the
         // user explicitly opts into the background-only mode.
-        showsInMenuBar = defaults.object(forKey: Key.showsInMenuBar) as? Bool ?? true
+        // Face ID for Mac: no menu-bar icon (the owner's menu bar is full). Open the app from Applications for settings.
+        showsInMenuBar = false
         preferredDisplayID = defaults.string(forKey: Key.preferredDisplayID)
         preferredDisplayName = defaults.string(forKey: Key.preferredDisplayName)
 
         // Defaults to 30 days
         autoLockInterval = (defaults.object(forKey: Key.autoLockIntervalDays) as? Int)
-            .flatMap(AutoLockInterval.init(rawValue:)) ?? .thirtyDays
+            .flatMap(AutoLockInterval.init(rawValue:)) ?? .never
         defaultCameraID = defaults.string(forKey: Key.defaultCameraID)
         builtInDisplayCameraID = defaults.string(forKey: Key.builtInDisplayCameraID)
         externalDisplayCameraID = defaults.string(forKey: Key.externalDisplayCameraID)
