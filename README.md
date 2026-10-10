@@ -1,142 +1,148 @@
 # Face ID for Mac · by PK
 
-**Разблокировка MacBook лицом через обычную камеру.** Открыл крышку или тапнул трекпад → экран проснулся → камера
-узнала владельца → Мак открыт. Touch ID и пароль при этом работают всегда, параллельно.
+**Unlock your MacBook with your face using the built-in camera.** Open the lid or tap the trackpad → the screen
+wakes → the camera recognizes you → the Mac unlocks. Touch ID and your password keep working the whole time.
 
-Личный форк [jonnyoo/glance](https://github.com/jonnyoo/glance) (MIT, © Jonathan Zhou). Распознавание лица
-(ArcFace на Neural Engine), проверку живого лица и окно на экране блокировки мы взяли у Glance. Вокруг этого
-построили ядро безопасности, защищённое хранилище пароля и русский интерфейс.
+A hardened fork of [jonnyoo/glance](https://github.com/jonnyoo/glance) (MIT, © Jonathan Zhou). Glance provides
+the face recognition (ArcFace on the Neural Engine), liveness cues and the lock-screen overlay. This fork adds a
+tested safety core, a Secure Enclave–backed password vault, strict rules for when the password may be typed, and
+removes all networking.
 
-> ⚠️ Это удобство, а не замена Touch ID. У камеры MacBook нет датчика глубины, как у Face ID в iPhone.
-> Распечатанное фото и экран телефона программа отсекает. Видео со своим лицом надёжно отсечь не может.
+> ⚠️ **Convenience, not a security upgrade.** A MacBook camera has no depth sensor, unlike Face ID on iPhone.
+> Printed photos and phone screens are rejected. A replayed video of your face may not be. Keep Touch ID for
+> anything that matters.
 
 ---
 
-## Как это работает
+## How it works
 
 ```
-экран заблокирован ─► пробуждение экрана / пробел ─► камера 5 с
-   ─► фильтр кадров ─► сравнение с записанным лицом + проверка «живое лицо»
-   ─► совпало? ─► страж ввода: всё ещё заблокировано? наша сессия? никто не печатает?
-   ─► печатает сохранённый пароль ─► снова страж ─► Return ─► проверка «открылось?»
+screen locked ─► screen wakes / Space pressed ─► camera, 5 s window
+   ─► frame quality gate ─► match against enrolled face + liveness
+   ─► match? ─► injection guard: still locked? our session? nobody typing?
+   ─► types the stored password ─► guard again ─► Return ─► verify the screen unlocked
 ```
 
-Программа **не подменяет** вход в macOS. После совпадения лица она печатает ваш сохранённый пароль в
-поле экрана блокировки, будто его набрали с клавиатуры. Другого способа нет: у macOS нет интерфейса, через который
-сторонняя программа может «впустить» пользователя.
+macOS has no API that lets a third-party app log a user in. So, like every webcam face-unlock app, this one
+**types your stored password into the lock screen** after a match. Everything below is about making that one action
+as safe as possible.
 
-## Принципы, на которых всё построено
+## Design principles (and why)
 
-Каждый пункт — ответ на конкретную проблему, найденную в коде Glance, в ревью или на живом Маке.
+Each rule answers a concrete problem found in upstream code, in review, or on a real Mac.
 
-1. **Добавляем, а не заменяем.** Мы не трогаем PAM, authorizationdb, плагины входа, loginwindow и системные файлы.
-   Программа упала, зависла или удалена — экран блокировки ровно такой, как без неё. Touch ID и клавиатура работают
-   с первой секунды, а не «после неудачи лица».
-2. **Ничего не перехватываем.** В коде нет CGEventTap. Клавиатура и трекпад только *слушаются* через IOHID в режиме
-   `kIOHIDOptionsTypeNone`, поэтому программа физически не может заблокировать или задержать нажатие.
-3. **Пароль печатается только после проверки стража, и страж проверяет дважды: перед текстом и перед Return.**
-   Каждый раз он убеждается, что:
-   - экран заблокирован, причём по любому из двух независимых источников: CGSession и системному уведомлению.
-     После Touch ID CGSession может запаздывать на сотни миллисекунд;
-   - на экране именно ваша сессия, а не другого пользователя (быстрая смена пользователей);
-   - после начала скана вы не нажимали клавиши и не кликали. Тап, который будит экран, не считается;
-   - выданы разрешения «Мониторинг ввода» и «Универсальный доступ». Без «Мониторинга ввода» страж слеп,
-     поэтому пароль не вводится вообще.
+1. **Add, never replace.** No PAM modules, no authorizationdb, no login plugins, no loginwindow changes, no system
+   files. If the app crashes, hangs or is deleted, the lock screen is exactly stock macOS. Touch ID and the keyboard
+   work from the first millisecond, in parallel, not "after face fails".
+2. **Never intercept input.** There is no `CGEventTap` in the code. Keyboard and trackpad are only *observed* through
+   IOHID with `kIOHIDOptionsTypeNone`, so the app physically cannot swallow or delay a keystroke or click.
+3. **A guard decides, twice: right before the text and right before Return.** The password is typed only if:
+   - the screen is locked according to **both** CGSession and the lock/unlock notification (CGSession can lag
+     hundreds of milliseconds after a Touch ID unlock);
+   - the session on the console is **yours** (fast user switching would otherwise type it into someone else's login);
+   - **you haven't pressed a key or clicked since the scan started** (the tap that woke the screen doesn't count);
+   - Input Monitoring and Accessibility are granted. Without Input Monitoring the guard is blind, so nothing is typed.
 
-   Поле пароля программа **никогда не стирает**: в Glance она стирала то, что вы уже начали набирать.
-4. **3 попытки за одну блокировку — потом тишина** до входа пальцем или паролем. Число попыток настраивается от 1 до 5.
-   Попыткой считается чужое лицо, подделка или «лицо есть, но не подтвердилось». Если вы просто не смотрели
-   в камеру, попытка не засчитывается.
-5. **Скан никогда не стартует от самой блокировки** — только от пробуждения экрана или пробела. Иначе было бы так:
-   нажали «заблокировать», а лицо ещё в кадре — и Мак тут же открылся обратно (в Glance это было включено по умолчанию).
-6. **Неверный сохранённый пароль включает «липкую» паузу.** После ввода программа проверяет, открылся ли Мак.
-   Если нет — например, пароль Мака сменили, — вход лицом выключается и остаётся выключенным даже после перезапуска,
-   пока пароль не сохранят заново. Иначе каждая блокировка добавляла бы неудачную попытку входа в учётную запись.
-7. **Один ввод пароля за раз.** Пока идёт ввод, новый скан не стартует. Без этого пароль мог бы напечататься дважды.
-8. **Ни байта в сеть.** Автообновление Sparkle и сервер обновлений автора вырезаны. Чужая сборка не может
-   заменить вашу.
-9. **Пароль защищён Secure Enclave.** Ключ шифрования пароля и лица обёрнут ключом внутри Secure Enclave
-   (P-256 ECDH + HKDF + AES-GCM) и открывается только по Touch ID или паролю. Платная подпись Apple для этого не нужна.
-   Хранилище Glance требовало платный Team ID.
-10. **Плохие кадры не участвуют.** Два лица в кадре — никогда не открывать. Лицо не целиком, сильно повёрнуто,
-    темно или смазано — кадр пропускается.
-11. **Проверка «живое лицо» по умолчанию лёгкая.** Это решение из живого теста: в строгом режиме,
-    где нужно моргнуть или повернуть голову, 5 из 6 проверок на Маке владельца не проходили. Лёгкий режим
-    по-прежнему отсекает фото и экран телефона. Строгий можно включить в окне программы.
-12. **Решает чистое ядро, действует тонкий слой.** Все правила из пунктов 3–7 и 10 — это чистые функции в
-    [`glance/Core`](glance/Core): без камеры и экрана, с юнит-тестами (`swift test`, 33 теста на каждой сборке).
-    Остальной код только спрашивает у ядра разрешения. Любая неясность означает «нет».
-13. **Ровно одна копия программы.** Вторая копия (запуск из Launchpad, копия с образа) только показывает окно
-    первой и выходит. Автозапуск через LaunchAgent поднимает программу заново **только после сбоя**:
-    ⌘Q действительно выключает её.
-14. **Всё видно.** Значка в строке меню нет (там у владельца нет места), поэтому статус, проверка сканера и журнал
-    событий — в окне. Журнал `~/Library/Logs/FaceIDforMac/events.jsonl` хранит только время, события и цифры:
-    ни пароля, ни кадров камеры.
+   The password field is **never cleared**: upstream wiped whatever you had already started typing.
+4. **Three attempts per lock, then silence.** After 3 failed attempts (configurable 1–5) the camera stays off until
+   you unlock with Touch ID or your password. A failed attempt is a wrong face, a spoof, or a face that couldn't be
+   confirmed. Not looking at the camera doesn't count.
+5. **Locking never starts a scan.** Only a wake or the Space bar does. Upstream scanned on lock by default: you lock
+   and walk away, your face is still in frame, and the Mac unlocks again.
+6. **A wrong stored password is a sticky pause.** After typing, the app checks whether the screen actually unlocked.
+   If not (for example, you changed your Mac password), face unlock turns off until you save the password again,
+   even across restarts. Otherwise every lock would add a failed login attempt to your account.
+7. **One injection at a time.** No new scan can start while a password is being typed; otherwise it could be typed
+   twice.
+8. **Zero network.** Sparkle and the upstream update feed are removed, so no other build can replace yours. CI fails
+   the build if Sparkle or a feed URL reappears.
+9. **Secure Enclave vault, no paid Apple account.** The key that encrypts your password and face data is wrapped by a
+   P-256 key that lives inside the Secure Enclave (ECDH + HKDF-SHA256 + AES-GCM) and requires Touch ID or the login
+   password to use. Upstream's keychain approach needs a paid Team ID; a self-signed build would fail with -34018.
+10. **Bad frames don't count.** Two faces in frame → never unlock on that frame. Partial, turned (>25°), dark or blurry
+    frames are skipped.
+11. **Light liveness by default.** The strict mode (blink or head turn required) failed 5 of 6 self-tests on a real
+    M1 MacBook Pro with a still, correctly recognized face. Light mode still rejects photos and phone screens. Strict
+    mode is one click away.
+12. **A pure core decides; a thin layer acts.** All rules above live in [`glance/Core`](glance/Core) as pure functions
+    with no camera, screen or keyboard, covered by 33 unit tests (`swift test`) on every build. The app layer only asks
+    the core for permission. Any doubt means "no".
+13. **Exactly one copy runs.** A second launch (Launchpad, a copy on the DMG) just shows the first one's window and
+    exits. The LaunchAgent restarts the app **only after a crash**, so ⌘Q really quits.
+14. **Observable.** There is no menu-bar icon, so status, a "Test scanner" button and recent events live in the app
+    window. The log (`~/Library/Logs/FaceIDforMac/events.jsonl`) records times, outcomes and numbers (similarity,
+    frames skipped and why, liveness), never the password or camera frames.
 
-Решения прошли трёх независимых критиков: план, архитектуру и код. Ревью кода нашло и закрыло три настоящие
-дыры: двойной ввод пароля, гонку с Touch ID и самопроизвольный перезапуск после ⌘Q.
+The plan, the architecture and the code were each reviewed by an independent critic. The code review found and fixed
+three real bugs: a double password injection, a Touch ID race, and a respawn after ⌘Q.
 
-## Результаты на MacBook Pro (M1, macOS 26.5), 10.10.2026
+## Measured on an M1 MacBook Pro (macOS 26.5)
 
 | | |
 |---|---|
-| Сходство с записанным лицом | 0,85–0,87 при пороге 0,66 |
-| Время узнавания | 0,3–1,3 с |
-| Вход с экрана блокировки | ✅ работает (журнал: «вход лицом — успех») |
-| Хранилище | Secure Enclave |
+| Similarity to enrolled face | 0.85–0.87 (threshold 0.66) |
+| Time to recognize | 0.3–1.3 s |
+| Unlock from the lock screen | ✅ works (log: "face unlock — success") |
+| Vault backend | Secure Enclave |
 
-**Известная проблема:** первый скан после пробуждения иногда завершается «похоже на подделку» (30–40 признаков
-блика или экрана за окно), а второй проходит сразу. Разбираем: вероятно, срабатывает признак «блик», когда
-лицо подсвечено ярким экраном блокировки.
+**Known issue:** the first scan right after wake sometimes ends as "spoof suspected" (30–40 glare/device cues in the
+window), and the second scan passes immediately. Likely cause: the bright lock screen lighting the face triggers the
+glare cue. Under investigation.
 
-## Окно программы
+## What to watch out for
 
-- **Главная** — статус, «Проверить сканер» (камера смотрит на вас, Мак не трогается), вход лицом вкл/выкл,
-  число попыток, время скана, строгость, последние события, «Свернуть в фон», «Выключить программу», версия, *by PK*.
-- **Лицо** — записать или перезаписать лицо.
-- **Пароль** — сохранить или обновить пароль Мака, подтвердить Touch ID.
+- **Ad-hoc signature.** Builds are signed ad-hoc (no Apple Developer account). macOS ties permissions to the exact
+  build, so **after every update you re-grant** Camera, Accessibility and Input Monitoring. Stale entries can block the
+  toggle; clear them with:
+  `tccutil reset Accessibility com.pavel.faceidformac` (same for `Camera`, `ListenEvent`).
+- **After a reboot,** the first login is always Touch ID or password (FileVault runs before any app). The app then
+  needs one Touch ID to open its vault.
+- **Gatekeeper.** First launch: System Settings → Privacy & Security → *Open Anyway*. Browsers may flag the download
+  as dangerous because it isn't notarized.
+- **Residual risk.** There are a few milliseconds between the guard's last check and the Return key. If you unlock with
+  Touch ID exactly then, a Return could reach the app in focus. The password text itself is always guarded.
+- **UI language.** The current build's interface is in Russian (the owner's build). All strings are plain Swift
+  literals and are easy to translate.
 
-Версия — это время коммита: `10.10.2026 18:15 · a1b2c3d`.
+## The app window
 
-## Установка
+- **Home:** status, *Test scanner* (the camera looks at you; nothing is typed, the Mac is untouched), on/off,
+  attempts, scan time, strictness, recent events, *Hide*, *Quit*, version, *by PK*.
+- **Face:** enroll or re-enroll.
+- **Password:** store or update the Mac password, confirm with Touch ID.
 
-1. Скачать `Face-ID-for-Mac-<версия>.dmg` из вложений сборки
-   ([Actions → build](../../actions/workflows/build.yml)) и перетащить программу в «Программы».
-2. Первый запуск: Системные настройки → Конфиденциальность и безопасность → «Всё равно открыть»
-   (программа подписана без платного аккаунта Apple).
-3. Разрешения: Камера, Универсальный доступ, Мониторинг ввода, Уведомления.
-4. Записать лицо, сохранить пароль Мака, подтвердить Touch ID.
+Version = commit time, e.g. `10.10.2026 18:15 · a1b2c3d`.
 
-> Сборка подписана разовой (ad-hoc) подписью. Поэтому после каждого обновления macOS считает её новой программой,
-> и разрешения нужно выдать заново. Старые записи сбрасываются командой
-> `tccutil reset Accessibility com.pavel.faceidformac`.
+## Install
 
-**Удаление:** `bash pk/uninstall.sh` удаляет программу, автозапуск, данные, журнал и выданные разрешения.
+1. Download `Face-ID-for-Mac-<version>.dmg` from a [build run](../../actions/workflows/build.yml) (artifacts) and drag
+   the app to Applications.
+2. First launch → *Open Anyway* in Privacy & Security.
+3. Grant Camera, Accessibility, Input Monitoring and Notifications.
+4. Enroll your face, store your Mac password, confirm with Touch ID.
 
-## Требования
+**Uninstall:** `bash pk/uninstall.sh` removes the app, its LaunchAgent, data, log and granted permissions.
 
-macOS 15+, Mac с Touch ID и Secure Enclave. Проверено на Apple Silicon (M1).
+**Requirements:** macOS 15+, a Mac with Touch ID and a Secure Enclave. Tested on Apple Silicon (M1).
 
-## Сборка
+## Build
 
-GitHub Actions на `macos-26` (Xcode 26):
-1. `swift test` — ядро безопасности.
-2. `xcodebuild` без подписи.
-3. Проверка, что в бинарнике нет Sparkle и адреса обновлений.
-4. Ad-hoc подпись с hardened runtime и правом только на камеру.
-5. DMG.
+GitHub Actions on `macos-26` (Xcode 26):
+1. `swift test` for the safety core.
+2. Unsigned `xcodebuild`.
+3. Binary checks: no Sparkle, no update feed.
+4. Ad-hoc signature with the hardened runtime and a camera-only entitlement.
+5. DMG artifact.
 
-Проектные документы: план, архитектура и все замечания критиков (K1–K12, A1–A16, W1–W9) ведутся
-в приватной памяти проекта.
+## Credits
 
----
-
-*by PK* · основано на [Glance](https://github.com/jonnyoo/glance) by Jonathan Zhou, MIT License.
+*by PK* · based on [Glance](https://github.com/jonnyoo/glance) by Jonathan Zhou, MIT License. The upstream README is
+kept below.
 
 ---
 
 <details>
-<summary>Исходный README Glance (upstream)</summary>
+<summary>Original Glance README (upstream)</summary>
 
 
 <h1 align="center">
