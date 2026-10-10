@@ -35,7 +35,7 @@ struct AboutSettingsPage: View {
                 .contentShape(Rectangle())
                 .onTapGesture(perform: handleIconTap)
 
-            Text("Glance")
+            Text("Face ID for Mac")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(SettingsMetrics.textPrimary)
 
@@ -67,7 +67,7 @@ struct AboutSettingsPage: View {
                 title: "Send Feedback",
                 buttonTitle: "Send"
             ) {
-                if let url = URL(string: "https://tryglance.app/feedback") {
+                if let url = URL(string: "https://github.com/kushnirpasha-lang/face-unlock-by-pk") {
                     NSWorkspace.shared.open(url)
                 }
             }

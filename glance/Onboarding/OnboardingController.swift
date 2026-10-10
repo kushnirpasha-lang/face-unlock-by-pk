@@ -1073,7 +1073,7 @@ final class OnboardingController {
 
         do {
             try await Task.detached(priority: .userInitiated) {
-                try SecureCredentialManager.unlockSession(reason: "Set up Glance")
+                try SecureCredentialManager.unlockSession(reason: "Set up Face ID for Mac")
             }.value
 
             // Only now that the session key exists can samples be encrypted and saved.
