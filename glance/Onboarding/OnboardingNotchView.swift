@@ -37,6 +37,29 @@ struct OnboardingNotchView: View {
         .id(controller.step)
         .frame(width: controller.panelSize.width, height: controller.panelSize.height)
         .transition(stepTransition)
+        .overlay(alignment: .topTrailing) { panelControls }
+    }
+
+    /// Face ID for Mac: the setup panel always has a way out — close it for now, or quit the app.
+    private var panelControls: some View {
+        HStack(spacing: 6) {
+            Button { controller.quitApp() } label: {
+                Image(systemName: "power").font(.system(size: 11, weight: .semibold))
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(.white.opacity(0.12)))
+            }
+            .buttonStyle(.plain)
+            .help("Выйти из программы")
+            Button { controller.closeForNow() } label: {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(.white.opacity(0.12)))
+            }
+            .buttonStyle(.plain)
+            .help("Закрыть (настройка продолжится при следующем открытии)")
+        }
+        .foregroundStyle(.white.opacity(0.8))
+        .padding(10)
     }
 
     private var stepTransition: AnyTransition {

@@ -655,6 +655,19 @@ final class OnboardingController {
         Task { await camera.start() }
     }
 
+    /// Face ID for Mac: the "✕" on the setup panel. Closes it without losing progress — the step already reached is
+    /// saved, and opening the app from Applications again resumes there.
+    func closeForNow() {
+        teardown()
+        NotchOverlayController.shared.dismissOnboarding()
+    }
+
+    /// Face ID for Mac: quit the whole app from the setup panel. Touch ID and the password are unaffected.
+    func quitApp() {
+        teardown()
+        NSApp.terminate(nil)
+    }
+
     /// Tears down everything onboarding spun up: camera, sweep overlay,
     /// and permissions polling. Idempotent.
     func teardown() {

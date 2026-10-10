@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct FaceIDHomePage: View {
     @Bindable var coordinator: FaceUnlockCoordinator
@@ -57,7 +58,12 @@ struct FaceIDHomePage: View {
                 .padding(6)
             }
 
-            Text("⌘Q выключает программу до следующего входа в систему. Для паузы используйте переключатель «Вход лицом». Touch ID и пароль работают всегда.")
+            HStack(spacing: 10) {
+                Button("Закрыть окно") { NSApp.keyWindow?.close() }
+                Button("Завершить программу", role: .destructive) { NSApp.terminate(nil) }
+                Spacer()
+            }
+            Text("«Закрыть окно» — программа продолжит работать в фоне. «Завершить программу» (или ⌘Q) — выключит её до следующего входа в систему или до запуска из «Программ». Для временной паузы — переключатель «Вход лицом». Touch ID и пароль работают всегда.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
