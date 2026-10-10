@@ -21,7 +21,7 @@ final class POCController {
     /// Bound to the setup SecureField. Cleared immediately after a successful save.
     var passwordInput: String = ""
 
-    var statusMessage: String = "Idle"
+    var statusMessage: String = "Ожидание"
 
     func refreshAccessibilityStatus() {
         accessibilityGranted = KeystrokeInjector.isAccessibilityTrusted()
@@ -43,7 +43,7 @@ final class POCController {
         sessionError = nil
         do {
             try await Task.detached(priority: .userInitiated) {
-                try SecureCredentialManager.unlockSession(reason: "Authenticate to set up or use Face ID for Mac")
+                try SecureCredentialManager.unlockSession(reason: "настроить или использовать Face ID for Mac")
             }.value
             isSessionUnlocked = true
         } catch {
@@ -63,7 +63,7 @@ final class POCController {
     /// be unlocked (Touch ID happens in `unlockSession()`, not here).
     func savePassword() async {
         guard !passwordInput.isEmpty else {
-            statusMessage = "Enter a password first."
+            statusMessage = "Сначала введите пароль."
             return
         }
         let plaintext = passwordInput
@@ -77,10 +77,10 @@ final class POCController {
                 defer { bytes.resetBytes(in: 0..<bytes.count) }
                 try SecureCredentialManager.savePassword(bytes)
             }.value
-            statusMessage = "Password saved and encrypted."
+            statusMessage = "Пароль сохранён и зашифрован."
             hasStoredPassword = true
         } catch {
-            statusMessage = "Save failed: \(error.localizedDescription)"
+            statusMessage = "Не удалось сохранить: \(error.localizedDescription)"
         }
     }
 

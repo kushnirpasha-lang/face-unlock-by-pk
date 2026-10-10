@@ -22,7 +22,7 @@ struct AboutSettingsPage: View {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = info?["CFBundleVersion"] as? String ?? "1"
-        return "Version \(short) (\(build))"
+        return "Версия \(short) (\(build))"
     }
 
     var body: some View {
@@ -48,8 +48,8 @@ struct AboutSettingsPage: View {
 
         SettingsGroup {
             SettingsActionRowContent(
-                title: "Check for Updates",
-                buttonTitle: "Check",
+                title: "Проверка обновлений",
+                buttonTitle: "Проверить",
                 isEnabled: updater.canCheckForUpdates
             ) {
                 updater.checkForUpdates()
@@ -57,15 +57,15 @@ struct AboutSettingsPage: View {
 
             SettingsGroupDivider()
 
-            SettingsRowContent(title: "Automatically check for updates") {
+            SettingsRowContent(title: "Проверять обновления автоматически") {
                 GlanceToggle(isOn: $updater.automaticallyChecksForUpdates)
             }
 
             SettingsGroupDivider()
 
             SettingsActionRowContent(
-                title: "Send Feedback",
-                buttonTitle: "Send"
+                title: "Отправить отзыв",
+                buttonTitle: "Отправить"
             ) {
                 if let url = URL(string: "https://github.com/kushnirpasha-lang/face-unlock-by-pk") {
                     NSWorkspace.shared.open(url)

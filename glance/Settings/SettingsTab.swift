@@ -24,9 +24,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .general: return "Главная"
         case .yourFace: return "Лицо"
         case .password: return "Пароль"
-        case .camera: return "Camera"
-        case .recognition: return "Recognition"
-        case .about: return "About"
+        case .camera: return "Камера"
+        case .recognition: return "Распознавание"
+        case .about: return "О программе"
         case .debugFaceLab: return "Face Lab"
         }
     }

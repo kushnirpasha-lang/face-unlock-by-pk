@@ -65,8 +65,8 @@ struct PasswordSettingsPage: View {
     private var noPasswordState: some View {
         SettingsEmptyStateView(
             icon: "lock.fill",
-            message: "Set up a password",
-            buttonTitle: "Set password",
+            message: "Задайте пароль",
+            buttonTitle: "Задать пароль",
             caption: statusMessage,
             action: { OnboardingController.startPasswordOnly() }
         )
@@ -77,8 +77,8 @@ struct PasswordSettingsPage: View {
     private var lockedState: some View {
         SettingsEmptyStateView(
             icon: "lock.fill",
-            message: "Session locked",
-            buttonTitle: isUnlocking ? "Authenticating…" : "Unlock session",
+            message: "Сеанс заблокирован",
+            buttonTitle: isUnlocking ? "Проверка…" : "Разблокировать сеанс",
             isButtonEnabled: !isUnlocking,
             caption: sessionError,
             action: unlock
@@ -90,7 +90,7 @@ struct PasswordSettingsPage: View {
     private var unlockedState: some View {
         VStack(alignment: .leading, spacing: SettingsMetrics.rowSpacing) {
             SettingsGroup {
-                SettingsRowContent(title: "Password encrypted") {
+                SettingsRowContent(title: "Пароль зашифрован") {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(SettingsMetrics.textSecondary)
@@ -99,7 +99,7 @@ struct PasswordSettingsPage: View {
                 SettingsGroupDivider()
 
                 SettingsSteppedSliderRowContent(
-                    title: "Auto lock session",
+                    title: "Автоблокировка сеанса",
                     valueLabel: settings.autoLockInterval.title,
                     index: Binding(
                         get: { settings.autoLockInterval.sliderIndex },
@@ -110,16 +110,16 @@ struct PasswordSettingsPage: View {
 
                 SettingsGroupDivider()
 
-                SettingsRowContent(title: "Change password") {
-                    SettingsPrimaryButton(title: "Change", compact: true) {
+                SettingsRowContent(title: "Сменить пароль") {
+                    SettingsPrimaryButton(title: "Сменить", compact: true) {
                         OnboardingController.startPasswordOnly()
                     }
                 }
 
                 SettingsGroupDivider()
 
-                SettingsRowContent(title: "Remove password") {
-                    HoldToConfirmButton(title: "Remove", action: removePassword)
+                SettingsRowContent(title: "Удалить пароль") {
+                    HoldToConfirmButton(title: "Удалить", action: removePassword)
                 }
             }
 
@@ -152,9 +152,9 @@ struct PasswordSettingsPage: View {
             FaceEnrollmentStore.shared.deleteAll()
             try SecureCredentialManager.deletePassword()
             pocController.refreshCredentialStatus()
-            statusMessage = "Password and face enrollment removed."
+            statusMessage = "Пароль и записанные лица удалены."
         } catch {
-            statusMessage = "Couldn't remove: \(error.localizedDescription)"
+            statusMessage = "Не удалось удалить: \(error.localizedDescription)"
         }
     }
 }

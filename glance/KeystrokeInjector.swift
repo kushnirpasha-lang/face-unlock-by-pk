@@ -16,9 +16,9 @@ enum KeystrokeError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .accessibilityNotGranted:
-            return "Accessibility permission required. Open System Settings → Privacy & Security → Accessibility and enable Face ID for Mac."
+            return "Нужно разрешение Универсального доступа. Откройте Системные настройки → Конфиденциальность и безопасность → Универсальный доступ и включите Face ID for Mac."
         case .eventCreationFailed:
-            return "Couldn't create CGEvent for keystroke."
+            return "Не удалось создать CGEvent для нажатия клавиши."
         }
     }
 }

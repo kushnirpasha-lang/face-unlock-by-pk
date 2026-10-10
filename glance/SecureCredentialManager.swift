@@ -21,15 +21,15 @@ enum SecureCredentialError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .emptyPassword:
-            return "Password cannot be empty."
+            return "Пароль не может быть пустым."
         case .sessionLocked:
-            return "Session is locked. Authenticate with Touch ID before storing or using the password."
+            return "Сеанс заблокирован. Подтвердите Touch ID, прежде чем сохранять или использовать пароль."
         case .encryptionFailed:
-            return "Encryption failed."
+            return "Ошибка шифрования."
         case .decryptionFailed:
-            return "Decryption failed. The stored credential may be corrupted."
+            return "Ошибка расшифровки. Сохранённые данные могут быть повреждены."
         case .sessionKeyUnavailable:
-            return "The session key is missing, but encrypted data still exists that only it could read. Nothing has been deleted. Remove the stored password on the Password tab to clear both and start fresh."
+            return "Ключ сеанса пропал, а зашифрованные им данные остались. Ничего не удалено. Удалите сохранённый пароль на вкладке «Пароль», чтобы очистить всё и начать заново."
         }
     }
 }

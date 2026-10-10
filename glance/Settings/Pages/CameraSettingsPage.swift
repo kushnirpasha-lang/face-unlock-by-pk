@@ -55,8 +55,8 @@ struct CameraSettingsPage: View {
     private var lockedState: some View {
         SettingsEmptyStateView(
             icon: "lock.fill",
-            message: "Session locked",
-            buttonTitle: isUnlocking ? "Authenticating…" : "Unlock session",
+            message: "Сеанс заблокирован",
+            buttonTitle: isUnlocking ? "Проверка…" : "Разблокировать сеанс",
             isButtonEnabled: !isUnlocking,
             caption: sessionError,
             action: unlock
@@ -68,14 +68,14 @@ struct CameraSettingsPage: View {
     private var unlockedState: some View {
         VStack(alignment: .leading, spacing: SettingsMetrics.rowSpacing) {
             SettingsGroup {
-                cameraPicker(title: "Default", selection: $settings.defaultCameraID)
+                cameraPicker(title: "По умолчанию", selection: $settings.defaultCameraID)
                 SettingsGroupDivider()
-                cameraPicker(title: "Built-in display", selection: $settings.builtInDisplayCameraID)
+                cameraPicker(title: "Встроенный дисплей", selection: $settings.builtInDisplayCameraID)
                 SettingsGroupDivider()
-                cameraPicker(title: "External display", selection: $settings.externalDisplayCameraID)
+                cameraPicker(title: "Внешний дисплей", selection: $settings.externalDisplayCameraID)
             }
 
-            SettingsSectionTitle(text: "Preview")
+            SettingsSectionTitle(text: "Предпросмотр")
             .padding(.bottom, -4)
             previewArea
                 .frame(height: 220)
@@ -103,7 +103,7 @@ struct CameraSettingsPage: View {
         } else {
             ZStack {
                 SettingsMetrics.rowColor
-                SettingsPrimaryButton(title: "Show preview", action: showPreview)
+                SettingsPrimaryButton(title: "Показать предпросмотр", action: showPreview)
             }
         }
     }
@@ -131,7 +131,7 @@ struct CameraSettingsPage: View {
     private func cameraPicker(title: String, selection: Binding<String?>) -> some View {
         SettingsRowContent(title: title) {
             SettingsMenuPickerPill(label: cameraLabel(for: selection.wrappedValue)) {
-                Button("System default") { selection.wrappedValue = nil }
+                Button("Системная по умолчанию") { selection.wrappedValue = nil }
                 ForEach(devices) { device in
                     Button(device.name) { selection.wrappedValue = device.id }
                 }
@@ -146,7 +146,7 @@ struct CameraSettingsPage: View {
 
     private func cameraLabel(for id: String?) -> String {
         guard let id, let device = devices.first(where: { $0.id == id }) else {
-            return "System default"
+            return "Системная по умолчанию"
         }
         return device.name
     }

@@ -37,11 +37,11 @@ enum LivenessCue: String, CaseIterable, Hashable, Identifiable {
 
     nonisolated var title: String {
         switch self {
-        case .glossGlare: return "Gloss/glare"
-        case .deviceDetected: return "Device detected"
-        case .flatVs3D: return "Flat vs 3D"
-        case .depthPose: return "Depth/pose"
-        case .blink: return "Blink"
+        case .glossGlare: return "Блики/отсвет"
+        case .deviceDetected: return "Обнаружено устройство"
+        case .flatVs3D: return "Плоское или 3D"
+        case .depthPose: return "Глубина/поворот"
+        case .blink: return "Моргание"
         }
     }
 
@@ -55,11 +55,11 @@ enum LivenessCue: String, CaseIterable, Hashable, Identifiable {
     /// One-line explanation of what firing actually means, for Face Lab.
     nonisolated var explanation: String {
         switch self {
-        case .glossGlare: return "Large flat specular highlight — glass/screen glare rather than skin's small scattered shine."
-        case .deviceDetected: return "A device-shaped rectangle overlaps the face — a phone or tablet held up."
-        case .flatVs3D: return "Held-out nose points miss the plane fit — the face has real depth."
-        case .depthPose: return "Nose offset tracks head yaw — the nose sits off the eye plane, so this isn't flat."
-        case .blink: return "Eye aspect ratio dipped and recovered — a photo cannot blink."
+        case .glossGlare: return "Крупный плоский блик — отсвет стекла или экрана, а не мелкий рассеянный блеск кожи."
+        case .deviceDetected: return "Прямоугольник в форме устройства перекрывает лицо — кто-то держит телефон или планшет."
+        case .flatVs3D: return "Точки носа не ложатся на плоскость — у лица есть настоящая глубина."
+        case .depthPose: return "Смещение носа следует за поворотом головы — нос выступает над плоскостью глаз, значит лицо не плоское."
+        case .blink: return "Глаза закрылись и снова открылись — фото моргать не умеет."
         }
     }
 }
@@ -78,15 +78,15 @@ enum LivenessMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .light: return "Light"
-        case .heavy: return "Heavy"
+        case .light: return "Лёгкая"
+        case .heavy: return "Строгая"
         }
     }
 
     var summary: String {
         switch self {
-        case .light: return "Only rejects obvious spoofs."
-        case .heavy: return "Also requires proof of a real face."
+        case .light: return "Отсекает только явные подделки."
+        case .heavy: return "Дополнительно требует доказать, что лицо живое."
         }
     }
 }
@@ -160,9 +160,9 @@ enum LivenessDecision: Equatable {
     var denialReason: String? {
         guard case .denied(let cue) = self else { return nil }
         switch cue {
-        case .glossGlare: return "Screen glare detected — this looks like a photo on a display."
-        case .deviceDetected: return "A device-shaped rectangle was detected around the face — this looks like a photo or screen."
-        default: return "Liveness check failed."
+        case .glossGlare: return "Обнаружен отсвет экрана — похоже на фото на дисплее."
+        case .deviceDetected: return "Вокруг лица обнаружен прямоугольник в форме устройства — похоже на фото или экран."
+        default: return "Проверка живого лица не пройдена."
         }
     }
 }

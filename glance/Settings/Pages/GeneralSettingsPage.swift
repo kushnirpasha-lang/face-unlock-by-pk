@@ -63,8 +63,8 @@ struct GeneralSettingsPage: View {
     private var lockedState: some View {
         SettingsEmptyStateView(
             icon: "lock.fill",
-            message: "Session locked",
-            buttonTitle: isUnlocking ? "Authenticating…" : "Unlock session",
+            message: "Сеанс заблокирован",
+            buttonTitle: isUnlocking ? "Проверка…" : "Разблокировать сеанс",
             isButtonEnabled: !isUnlocking,
             caption: sessionError,
             action: unlock
@@ -76,7 +76,7 @@ struct GeneralSettingsPage: View {
     private var unlockedState: some View {
         VStack(alignment: .leading, spacing: SettingsMetrics.rowSpacing) {
             SettingsGroup {
-                SettingsRowContent(title: "Launch at login") {
+                SettingsRowContent(title: "Запускать при входе") {
                     GlanceToggle(isOn: Binding(
                         get: { launchAtLoginEnabled },
                         set: { newValue in
@@ -92,11 +92,11 @@ struct GeneralSettingsPage: View {
                     ))
                 }
                 SettingsGroupDivider()
-                SettingsRowContent(title: "Show in menu bar") {
+                SettingsRowContent(title: "Показывать в строке меню") {
                     GlanceToggle(isOn: $settings.showsInMenuBar)
                 }
                 SettingsGroupDivider()
-                SettingsRowContent(title: "Enable Face Unlock") {
+                SettingsRowContent(title: "Разблокировка лицом") {
                     GlanceToggle(isOn: $coordinator.isEnabled)
                 }
                 SettingsGroupDivider()
@@ -126,29 +126,29 @@ struct GeneralSettingsPage: View {
                 SettingsCaption(text: launchAtLoginError)
             }
             if hasInheritedXcodePermission {
-                SettingsCaption(text: "Running from Xcode — permission checks resolve against Xcode’s grants, not Face ID for Mac’s, so this reading is meaningless. Launch Face ID for Mac.app on its own to see the real state.")
+                SettingsCaption(text: "Запуск из Xcode — разрешения проверяются для Xcode, а не для Face ID for Mac, поэтому это показание неверно. Запустите Face ID for Mac.app отдельно, чтобы увидеть реальное состояние.")
             } else if needsInputMonitoring {
                 inputMonitoringNotice()
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                SettingsSectionTitle(text: "Behaviour")
+                SettingsSectionTitle(text: "Поведение")
                 SettingsGroup {
-                    SettingsRowContent(title: "Retry on notch hover") {
+                    SettingsRowContent(title: "Повтор при наведении на чёлку") {
                         GlanceToggle(isOn: $settings.retryOnHover)
                     }
                     SettingsGroupDivider()
-                    SettingsRowContent(title: "Auto retry once after failure") {
+                    SettingsRowContent(title: "Один автоповтор после неудачи") {
                         GlanceToggle(isOn: $settings.autoRetryOnce)
                     }
                     SettingsGroupDivider()
-                    SettingsRowContent(title: "Haptic feedback") {
+                    SettingsRowContent(title: "Тактильный отклик") {
                         GlanceToggle(isOn: $settings.hapticFeedbackEnabled)
                     }
                     SettingsGroupDivider()
                     SettingsSteppedSliderRowContent(
-                        title: "Face detection duration",
-                        valueLabel: "\(settings.faceDetectionSeconds)s",
+                        title: "Время поиска лица",
+                        valueLabel: "\(settings.faceDetectionSeconds) с",
                         index: Binding(
                             get: { Double(settings.faceDetectionSeconds - GlanceSettings.faceDetectionRange.lowerBound) },
                             set: { settings.faceDetectionSeconds = GlanceSettings.faceDetectionRange.lowerBound + Int($0.rounded()) }
@@ -159,9 +159,9 @@ struct GeneralSettingsPage: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                SettingsSectionTitle(text: "Animation")
+                SettingsSectionTitle(text: "Анимация")
                 SettingsGroup {
-                    SettingsRowContent(title: "Show animation") {
+                    SettingsRowContent(title: "Показывать анимацию") {
                         GlanceToggle(isOn: $settings.showUnlockAnimation)
                     }
                     SettingsGroupDivider()
@@ -187,8 +187,8 @@ struct GeneralSettingsPage: View {
     /// Shown while "On space" is selected but Input Monitoring isn't granted.
     private func inputMonitoringNotice() -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            SettingsCaption(text: "“On space” reads the keyboard directly to see the space key on the lock screen, which needs Accessibility — the same permission Face ID for Mac uses to type your password. Switch Face ID for Mac on under Privacy & Security → Accessibility, then quit and reopen Face ID for Mac.")
-            Button("Open Accessibility settings") {
+            SettingsCaption(text: "Режим «По пробелу» читает клавиатуру напрямую, чтобы увидеть пробел на экране блокировки, — для этого нужен Универсальный доступ (то же разрешение, которым Face ID for Mac вводит ваш пароль). Включите Face ID for Mac в Системные настройки → Конфиденциальность и безопасность → Универсальный доступ, затем закройте и снова откройте приложение.")
+            Button("Открыть настройки Универсального доступа") {
                 // Covers the rare install with no Accessibility grant at all.
                 SpaceKeyMonitor.requestInputMonitoringAccess()
                 openSystemSettings(pane: "Privacy_Accessibility")
@@ -208,9 +208,9 @@ struct GeneralSettingsPage: View {
     }
 
     private func displayPicker() -> some View {
-        SettingsRowContent(title: "Display on") {
+        SettingsRowContent(title: "Показывать на") {
             SettingsMenuPickerPill(label: displayLabel) {
-                Button("Main display") {
+                Button("Основной дисплей") {
                     settings.preferredDisplayID = nil
                     settings.preferredDisplayName = nil
                 }
@@ -238,13 +238,13 @@ struct GeneralSettingsPage: View {
     }
 
     private var displayLabel: String {
-        guard let targetID = settings.preferredDisplayID else { return "Main display" }
+        guard let targetID = settings.preferredDisplayID else { return "Основной дисплей" }
         if let connected = screens.first(where: { $0.stableDisplayID == targetID }) {
             return connected.localizedName
         }
         // Picked, but not currently connected — say so rather than showing
         // a bare ID or falling back to another display's name.
-        guard let name = settings.preferredDisplayName else { return "Selected display (disconnected)" }
-        return "\(name) (disconnected)"
+        guard let name = settings.preferredDisplayName else { return "Выбранный дисплей (отключён)" }
+        return "\(name) (отключён)"
     }
 }

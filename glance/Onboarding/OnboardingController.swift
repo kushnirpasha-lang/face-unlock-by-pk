@@ -98,15 +98,15 @@ enum EnrollmentPose: Int, CaseIterable {
 
     var instruction: String {
         switch self {
-        case .center: return "Look straight at the camera"
-        case .left: return "Turn your head slightly left"
-        case .topLeft: return "Turn your head to the top left"
-        case .top: return "Turn your head slightly up"
-        case .topRight: return "Turn your head to the top right"
-        case .right: return "Turn your head slightly right"
-        case .bottomRight: return "Turn your head to the bottom right"
-        case .bottom: return "Turn your head slightly down"
-        case .bottomLeft: return "Turn your head to the bottom left"
+        case .center: return "Смотрите прямо в камеру"
+        case .left: return "Слегка поверните голову влево"
+        case .topLeft: return "Поверните голову вверх и влево"
+        case .top: return "Слегка поднимите голову"
+        case .topRight: return "Поверните голову вверх и вправо"
+        case .right: return "Слегка поверните голову вправо"
+        case .bottomRight: return "Поверните голову вниз и вправо"
+        case .bottom: return "Слегка опустите голову"
+        case .bottomLeft: return "Поверните голову вниз и влево"
         }
     }
 
@@ -250,7 +250,7 @@ final class OnboardingController {
     /// `identities.first`: "redo" replaces it in place, or enrolls someone new.
     static func startEnrollmentOnly() {
         Task { @MainActor in
-            guard await unlockForEnrollment(reason: "Authenticate to re-enroll your face") else { return }
+            guard await unlockForEnrollment(reason: "заново записать ваше лицо") else { return }
             let store = FaceEnrollmentStore.shared
             store.reloadIfUnlocked()
             let existing = store.identities.first
@@ -265,7 +265,7 @@ final class OnboardingController {
     /// alongside whoever is already enrolled; name starts empty rather than `defaultName`.
     static func startAddIdentity() {
         Task { @MainActor in
-            guard await unlockForEnrollment(reason: "Authenticate to enroll another face") else { return }
+            guard await unlockForEnrollment(reason: "добавить ещё одно лицо") else { return }
             FaceEnrollmentStore.shared.reloadIfUnlocked()
             present(target: .newIdentity, prefillName: "")
         }
@@ -275,7 +275,7 @@ final class OnboardingController {
     /// samples wholesale, keeping its id and enrollment date.
     static func startRecapture(of identity: FaceIdentity) {
         Task { @MainActor in
-            guard await unlockForEnrollment(reason: "Authenticate to re-enroll this face") else { return }
+            guard await unlockForEnrollment(reason: "заново записать это лицо") else { return }
             FaceEnrollmentStore.shared.reloadIfUnlocked()
             present(target: .replacing(identity.id), prefillName: identity.name)
         }
@@ -394,14 +394,14 @@ final class OnboardingController {
 
         var instruction: String {
             switch self {
-            case .left: return "Too far left"
-            case .topLeft: return "Too far toward the top left"
-            case .up: return "Too far up"
-            case .topRight: return "Too far toward the top right"
-            case .right: return "Too far right"
-            case .bottomRight: return "Too far toward the bottom right"
-            case .down: return "Too far down"
-            case .bottomLeft: return "Too far toward the bottom left"
+            case .left: return "Слишком сильно влево"
+            case .topLeft: return "Слишком сильно вверх и влево"
+            case .up: return "Слишком сильно вверх"
+            case .topRight: return "Слишком сильно вверх и вправо"
+            case .right: return "Слишком сильно вправо"
+            case .bottomRight: return "Слишком сильно вниз и вправо"
+            case .down: return "Слишком сильно вниз"
+            case .bottomLeft: return "Слишком сильно вниз и влево"
             }
         }
     }
@@ -452,9 +452,9 @@ final class OnboardingController {
     /// Copy shown under the camera: pose guidance, a closer-up prompt, or the
     /// completion line.
     var enrollmentInstruction: String {
-        if enrollmentComplete { return "Face captured" }
+        if enrollmentComplete { return "Лицо записано" }
         if let excessiveTurn { return excessiveTurn.instruction }
-        if isTooFar { return "Bring your face closer" }
+        if isTooFar { return "Придвиньтесь ближе к камере" }
         return currentPose?.instruction ?? ""
     }
 
@@ -507,7 +507,7 @@ final class OnboardingController {
 
     /// Naming is the last input in an add/recapture flow, but only the
     /// halfway point of first-run setup, where the password still follows.
-    var nameStepPrimaryTitle: String { isEnrollmentOnly ? "Save" : "Continue" }
+    var nameStepPrimaryTitle: String { isEnrollmentOnly ? "Сохранить" : "Продолжить" }
 
     // MARK: - Password
 
@@ -748,8 +748,8 @@ final class OnboardingController {
            let device = cameraDevices.first(where: { $0.id == id }) {
             return device.name
         }
-        guard let name = resolveDefaultCameraDevice()?.localizedName else { return "System default" }
-        return "\(name) (Default)"
+        guard let name = resolveDefaultCameraDevice()?.localizedName else { return "Системная по умолчанию" }
+        return "\(name) (по умолчанию)"
     }
 
     /// Writes the pick straight into Settings — the same `defaultCameraID` the Camera
@@ -1015,13 +1015,13 @@ final class OnboardingController {
     func confirmName() {
         let trimmed = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            nameError = "Enter a name."
+            nameError = "Введите имя."
             return
         }
         // Skipped silently in the full setup flow, where the store is still locked and
         // `identities` is unreadable, not empty. `finish(password:)` re-checks once open.
         guard !store.nameIsTaken(trimmed, excluding: enrollmentTarget.identityID) else {
-            nameError = "A face named \"\(trimmed)\" is already enrolled."
+            nameError = "Лицо с именем «\(trimmed)» уже записано."
             return
         }
         nameError = nil
@@ -1066,7 +1066,7 @@ final class OnboardingController {
     /// stored name, which the user now always chooses themselves.
     static let defaultName: String = {
         let name = NSFullUserName()
-        return name.isEmpty ? "Owner" : name
+        return name.isEmpty ? "Владелец" : name
     }()
 
     // MARK: - Password
@@ -1078,7 +1078,7 @@ final class OnboardingController {
         guard !isSavingPassword else { return false }
         let trimmed = password
         guard !trimmed.isEmpty else {
-            passwordError = "Enter a password."
+            passwordError = "Введите пароль."
             return false
         }
         isSavingPassword = true
@@ -1086,7 +1086,7 @@ final class OnboardingController {
 
         do {
             try await Task.detached(priority: .userInitiated) {
-                try SecureCredentialManager.unlockSession(reason: "Set up Face ID for Mac")
+                try SecureCredentialManager.unlockSession(reason: "настроить Face ID for Mac")
             }.value
 
             // Only now that the session key exists can samples be encrypted and saved.
@@ -1096,7 +1096,7 @@ final class OnboardingController {
                 let name = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
                 // The naming step couldn't run this check while the store was locked.
                 guard !store.nameIsTaken(name, excluding: enrollmentTarget.identityID) else {
-                    nameError = "A face named \"\(name)\" is already enrolled."
+                    nameError = "Лицо с именем «\(name)» уже записано."
                     navDirection = .backward
                     withAnimation(OnboardingMetrics.stepAnimation) { step = .name }
                     return false

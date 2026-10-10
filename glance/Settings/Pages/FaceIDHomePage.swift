@@ -31,7 +31,7 @@ struct FaceIDHomePage: View {
                         Text("Время одного скана: \(settings.faceDetectionSeconds) с")
                     }
                     Picker("Строгость", selection: $settings.livenessMode) {
-                        Text("Обычная").tag(LivenessMode.light)
+                        Text("Лёгкая").tag(LivenessMode.light)
                         Text("Строгая (живое лицо: моргнуть или повернуть голову)").tag(LivenessMode.heavy)
                     }
                     Toggle("Уведомлять, когда вход лицом на паузе", isOn: $settings.notifyOnPause)

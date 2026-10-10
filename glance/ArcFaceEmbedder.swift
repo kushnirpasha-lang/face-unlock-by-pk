@@ -19,15 +19,15 @@ enum ArcFaceEmbedderError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .modelNotFound:
-            return "ArcFace.mlpackage/mlmodelc not found in the app bundle. Run tools/convert_arcface.py, then add Face ID for Mac/Models/ArcFace.mlpackage to the Xcode project."
+            return "ArcFace.mlpackage/mlmodelc не найден в приложении. Запустите tools/convert_arcface.py, затем добавьте Face ID for Mac/Models/ArcFace.mlpackage в проект Xcode."
         case .modelLoadFailed(let detail):
-            return "Failed to load the ArcFace Core ML model: \(detail)"
+            return "Не удалось загрузить модель ArcFace Core ML: \(detail)"
         case .pixelBufferCreationFailed:
-            return "Couldn't prepare the aligned face image for Core ML."
+            return "Не удалось подготовить выровненное изображение лица для Core ML."
         case .unexpectedInputSize(let got, let expected):
-            return "ArcFaceEmbedder expects a \(expected)x\(expected) aligned image, got \(got.0)x\(got.1). Run the face through FaceAligner first."
+            return "ArcFaceEmbedder ждёт выровненное изображение \(expected)x\(expected), получено \(got.0)x\(got.1). Сначала пропустите лицо через FaceAligner."
         case .unexpectedOutput(let detail):
-            return "ArcFace model produced an unexpected output: \(detail)"
+            return "Модель ArcFace вернула неожиданный результат: \(detail)"
         }
     }
 }

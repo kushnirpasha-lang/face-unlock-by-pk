@@ -76,7 +76,7 @@ struct YourFaceSettingsPage: View {
             store.reloadIfUnlocked()
         }
         .confirmationDialog(
-            "Delete this enrolled face?",
+            "Удалить это лицо?",
             isPresented: Binding(
                 get: { identityPendingDeletion != nil },
                 set: { if !$0 { identityPendingDeletion = nil } }
@@ -84,10 +84,10 @@ struct YourFaceSettingsPage: View {
             titleVisibility: .visible,
             presenting: identityPendingDeletion
         ) { identity in
-            Button("Delete", role: .destructive) { delete(identity) }
-            Button("Cancel", role: .cancel) { identityPendingDeletion = nil }
+            Button("Удалить", role: .destructive) { delete(identity) }
+            Button("Отмена", role: .cancel) { identityPendingDeletion = nil }
         } message: { identity in
-            Text("\"\(identity.name)\" will stop being recognized until you enroll them again.")
+            Text("«\(identity.name)» перестанет распознаваться, пока вы не запишете лицо заново.")
         }
     }
 
@@ -96,8 +96,8 @@ struct YourFaceSettingsPage: View {
     private var lockedState: some View {
         SettingsEmptyStateView(
             icon: "lock.fill",
-            message: "Session locked",
-            buttonTitle: isUnlocking ? "Authenticating…" : "Unlock session",
+            message: "Сеанс заблокирован",
+            buttonTitle: isUnlocking ? "Проверка…" : "Разблокировать сеанс",
             isButtonEnabled: !isUnlocking,
             caption: sessionError,
             action: unlock
@@ -115,14 +115,14 @@ struct YourFaceSettingsPage: View {
                 .font(.system(size: SettingsMetrics.emptyStateIconSize, weight: .regular))
                 .foregroundStyle(SettingsMetrics.qualityFairColor)
 
-            Text("Enrolled faces couldn't be read")
+            Text("Не удалось прочитать записанные лица")
                 .font(SettingsMetrics.rowFont)
                 .foregroundStyle(SettingsMetrics.textSecondary)
 
-            SettingsCaption(text: store.loadFailure ?? "The stored data couldn't be decrypted with this session key.")
+            SettingsCaption(text: store.loadFailure ?? "Сохранённые данные не расшифровываются этим ключом сеанса.")
                 .multilineTextAlignment(.center)
 
-            SettingsCaption(text: "Nothing has been deleted, and Face ID for Mac will not overwrite it — enrolling is blocked until this resolves. Quit and reopen Face ID for Mac to retry. If it keeps failing, the session key no longer matches this data: remove the stored password on the Password tab to clear both, then set up again.")
+            SettingsCaption(text: "Ничего не удалено, и Face ID for Mac не будет это перезаписывать — запись лица заблокирована, пока проблема не решится. Закройте и снова откройте Face ID for Mac. Если не помогает, ключ сеанса больше не подходит к этим данным: удалите сохранённый пароль на вкладке «Пароль» (это очистит и пароль, и лица), затем настройте заново.")
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, minHeight: SettingsMetrics.emptyStateMinHeight)
@@ -133,8 +133,8 @@ struct YourFaceSettingsPage: View {
     private var notEnrolledState: some View {
         SettingsEmptyStateView(
             icon: "faceid",
-            message: "Face enrollment",
-            buttonTitle: "Set up Face Unlock",
+            message: "Запись лица",
+            buttonTitle: "Настроить разблокировку лицом",
             isButtonEnabled: !enrollmentFlowIsRunning,
             action: { OnboardingController.startEnrollmentOnly() }
         )
@@ -162,7 +162,7 @@ struct YourFaceSettingsPage: View {
             }
 
             if !store.identities.isEmpty && store.activeIdentities.isEmpty {
-                SettingsCaption(text: "No identities are enabled — face unlock won't recognize anyone until you switch one back on.")
+                SettingsCaption(text: "Ни одно лицо не включено — разблокировка лицом никого не узнает, пока вы не включите хотя бы одно.")
             }
 
             if let writeError {
@@ -177,7 +177,7 @@ struct YourFaceSettingsPage: View {
         SettingsGroup {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text("Face encrypted")
+                    Text("Лицо зашифровано")
                         .font(SettingsMetrics.rowFont)
                         .foregroundStyle(SettingsMetrics.textPrimary)
                     Spacer(minLength: 8)
@@ -186,7 +186,7 @@ struct YourFaceSettingsPage: View {
                         .foregroundStyle(SettingsMetrics.textSecondary)
                 }
 
-                Text("Enroll separate identities to use Face ID for Mac with multiple people, accessories (ex. glasses), facial expressions, or new lighting environments. This improves recognition quality.")
+                Text("Записывайте отдельные лица, чтобы Face ID for Mac узнавал нескольких людей, аксессуары (например, очки), разные выражения лица или новое освещение. Это улучшает качество распознавания.")
                     .font(.system(size: 12))
                     .foregroundStyle(SettingsMetrics.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -199,7 +199,7 @@ struct YourFaceSettingsPage: View {
 
     private var identitiesHeader: some View {
         HStack(spacing: 0) {
-            SettingsSectionTitle(text: "Identities")
+            SettingsSectionTitle(text: "Лица")
 
             Button {
                 OnboardingController.startAddIdentity()
@@ -213,7 +213,7 @@ struct YourFaceSettingsPage: View {
             .buttonStyle(.plain)
             .disabled(enrollmentFlowIsRunning)
             .opacity(enrollmentFlowIsRunning ? 0.4 : 1)
-            .help("Enroll another face")
+            .help("Записать ещё одно лицо")
             .padding(.trailing, SettingsMetrics.sectionTitleHorizontalInset)
             .padding(.top, SettingsMetrics.sectionTitleVerticalPadding)
         }
@@ -253,7 +253,7 @@ struct YourFaceSettingsPage: View {
         Task {
             do {
                 try await Task.detached(priority: .userInitiated) {
-                    try SecureCredentialManager.unlockSession(reason: "Authenticate to view your enrolled face")
+                    try SecureCredentialManager.unlockSession(reason: "открыть записанное лицо")
                 }.value
                 store.reloadIfUnlocked()
             } catch {
@@ -296,9 +296,9 @@ private struct IdentityCard: View {
     /// An enrollment saved before per-sample quality existed reports "not
     /// recorded" rather than a misleading 100%.
     private var qualityCaption: String {
-        if identity.samples.isEmpty { return "No samples captured" }
-        if ratedCount == 0 { return "Capture quality • not recorded" }
-        return "Capture quality • \(qualityPercentage)%"
+        if identity.samples.isEmpty { return "Снимков нет" }
+        if ratedCount == 0 { return "Качество записи • не измерено" }
+        return "Качество записи • \(qualityPercentage)%"
     }
 
     var body: some View {
@@ -320,11 +320,11 @@ private struct IdentityCard: View {
                         QualityTickStrip(samples: identity.samples)
                         .padding(.leading, 2)
                         Spacer(minLength: 12)
-                        PillActionButton(title: "Recapture", action: recapture)
+                        PillActionButton(title: "Перезаписать", action: recapture)
                             .disabled(!canStartFlow)
                             .opacity(canStartFlow ? 1 : 0.4)
                         PillIconButton(systemImage: "trash", action: delete)
-                            .help("Delete \(identity.name)")
+                            .help("Удалить «\(identity.name)»")
                     }
                 }
                 // Dimmed rather than hidden while switched off: the person
@@ -332,7 +332,7 @@ private struct IdentityCard: View {
                 .opacity(isEnabled ? 1 : 0.45)
 
                 if isStale {
-                    Text("Captured with a different recognition model — recapture before this face can unlock your Mac.")
+                    Text("Записано другой моделью распознавания — перезапишите лицо, чтобы оно снова могло разблокировать Mac.")
                         .font(.system(size: 11))
                         .foregroundStyle(SettingsMetrics.qualityFairColor)
                         .fixedSize(horizontal: false, vertical: true)
@@ -378,7 +378,7 @@ private struct QualityTickStrip: View {
         }
         .frame(width: stripWidth, height: SettingsMetrics.qualityTickHeight, alignment: .leading)
         .accessibilityElement()
-        .accessibilityLabel("Capture quality for \(samples.count) samples")
+        .accessibilityLabel("Качество записи, снимков: \(samples.count)")
     }
 
     /// Fixed rather than flexible: this strip shares a row with a `Spacer`
