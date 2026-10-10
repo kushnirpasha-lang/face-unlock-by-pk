@@ -87,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        EventLog.shared.add("запуск", "версия \(AppVersion.display); через launchd: \(AppLifecycle.launchedByLaunchd)")
         AppLifecycle.ensureLaunchAgent()
         PauseNotifier.requestPermissionIfNeeded()
         DistributedNotificationCenter.default().addObserver(
@@ -256,6 +257,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Reopening the already-running app from Finder, Spotlight, or the Dock is
     /// an intentional request for Settings.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        EventLog.shared.add("окно", "открыть (клик в «Программах»), онбординг пройден: \(GlanceSettings.shared.hasCompletedOnboarding)")
         revealSettingsWindow()
         return false
     }
