@@ -47,6 +47,21 @@ final class FaceUnlockCoordinator {
     /// A single glare frame (glasses) is not a spoof; a deny cue must persist this long to count (A13).
     private let spoofSustain: TimeInterval = 1
 
+    /// Per-scan numbers (no images, no embeddings) — shown after a self-test and written to the journal, so a failing
+    /// scan says WHY: never matched, matched but liveness never confirmed, frames thrown away, …
+    struct ScanStats {
+        var frames = 0, noFace = 0, partial = 0, turned = 0, lowQuality = 0, multiFace = 0
+        var used = 0, matchedFrames = 0, denyCues = 0
+        var bestSimilarity: Float = -1
+        var livenessConfirmed = false
+
+        var summary: String {
+            let sim = bestSimilarity < 0 ? "—" : String(format: "%.2f", bestSimilarity)
+            return "кадров \(frames): годных \(used), без лица \(noFace), неполное \(partial), повёрнуто \(turned), темно/смазано \(lowQuality), 2+ лица \(multiFace); совпадений \(matchedFrames), лучшее сходство \(sim); живое лицо: \(livenessConfirmed ? "да" : "нет"), признаков подделки \(denyCues)"
+        }
+    }
+    private(set) var lastScanStats = ScanStats()
+
     private(set) var statusMessage = "Ожидание"
     /// Self-test from the settings window: the camera looks, the result is shown — nothing is typed, the Mac isn't touched.
     private(set) var selfTestRunning = false
@@ -207,7 +222,7 @@ final class FaceUnlockCoordinator {
         let next = policy.finishScan(generation: generation, result: result)
         if showsUI { NotchOverlayController.shared.finish(success: result == .matched) }
         if result != .cancelled {
-            EventLog.shared.add("итог скана", "\(result.rawValue) за \(elapsed); попыток осталось \(policy.attemptsLeft)")
+            EventLog.shared.add("итог скана", "\(result.rawValue) за \(elapsed); попыток осталось \(policy.attemptsLeft); \(lastScanStats.summary)")
         }
         if policy.pause == .attemptsExhausted, result.countsAsAttempt {
             EventLog.shared.add("пауза", "\(policy.maxAttempts) неудачи — только палец или пароль до разблокировки")
@@ -228,6 +243,8 @@ final class FaceUnlockCoordinator {
         var lastFaceBoundingBox: CGRect?
         var lastProcessedFrameID: UInt64?
         var sawUsableFace = false
+        var stats = ScanStats()
+        defer { lastScanStats = stats }
 
         while Date() < deadline, !Task.isCancelled {
             if requireLocked, !SessionFacts.current().screenLocked { return .cancelled }
@@ -246,7 +263,9 @@ final class FaceUnlockCoordinator {
                 return (result, LivenessFeatureExtractor.extract(from: result, frame: frame.image, faceCrop: faceCrop))
             }.value
 
+            stats.frames += 1
             guard let (result, livenessFrame) = outcome else {
+                stats.noFace += 1
                 wrongFaceStartedAt = nil
                 lastFaceBoundingBox = nil
                 readyMatch = nil
@@ -266,13 +285,21 @@ final class FaceUnlockCoordinator {
             switch FrameQualityGate.evaluate(facts) {
             case .use:
                 sawUsableFace = true
+                stats.used += 1
             case .refuseMultipleFaces:
                 sawUsableFace = true
+                stats.multiFace += 1
                 readyMatch = nil
                 lastOutcome = "В кадре больше одного лица"
                 try? await Task.sleep(nanoseconds: 20_000_000)
                 continue
-            case .skip:
+            case .skip(let why):
+                switch why {
+                case .noFace: stats.noFace += 1
+                case .partialFace: stats.partial += 1
+                case .turnedAway: stats.turned += 1
+                case .lowQuality: stats.lowQuality += 1
+                }
                 try? await Task.sleep(nanoseconds: 20_000_000)
                 continue
             }
@@ -281,6 +308,7 @@ final class FaceUnlockCoordinator {
                 let snapshot = liveness.observe(livenessFrame)
                 switch snapshot.decision {
                 case .denied:
+                    stats.denyCues += 1
                     // One glare frame is not a spoof (A13): restart the analyzer and require the deny to persist.
                     let now = Date()
                     if let since = denySince, now.timeIntervalSince(since) >= spoofSustain {
@@ -293,6 +321,7 @@ final class FaceUnlockCoordinator {
                     livenessConfirmed = false
                     readyMatch = nil
                 case .confirmed:
+                    stats.livenessConfirmed = true
                     livenessConfirmed = true
                     if let since = denySince, Date().timeIntervalSince(since) >= spoofSustain { denySince = nil }
                 case .pending:
@@ -301,7 +330,11 @@ final class FaceUnlockCoordinator {
             }
 
             let scored = pipeline.score(result.embedding, against: FaceEnrollmentStore.shared.activeIdentities)
+            if let top = scored.map({ min($0.centroidSimilarity, $0.maxSampleSimilarity) }).max() {
+                stats.bestSimilarity = max(stats.bestSimilarity, top)
+            }
             if let matched = pipeline.bestMatch(in: scored, threshold: matchThreshold) {
+                stats.matchedFrames += 1
                 wrongFaceStartedAt = nil
                 readyMatch = matched
             } else {
@@ -378,7 +411,8 @@ final class FaceUnlockCoordinator {
             selfTestPassed = nil
             selfTestResult = "Проверка прервана."
         }
-        EventLog.shared.add("проверка сканера", "\(result.rawValue) за \(secs) с")
+        selfTestResult = (selfTestResult ?? "") + "\n\(lastScanStats.summary). Порог сходства \(String(format: "%.2f", matchThreshold))."
+        EventLog.shared.add("проверка сканера", "\(result.rawValue) за \(secs) с; \(lastScanStats.summary)")
     }
 
     // MARK: - Injection

@@ -303,7 +303,7 @@ final class GlanceSettings {
         // still, non-blinking user may never produce, while Light still
         // catches the main attack (a photo on a phone screen).
         livenessMode = defaults.string(forKey: Key.livenessMode)
-            .flatMap(LivenessMode.init(rawValue:)) ?? .heavy
+            .flatMap(LivenessMode.init(rawValue:)) ?? .light   // Face ID for Mac: heavy failed 5/6 self-tests on the owner's Pro (10.10)
         // Matches `DetectionDistanceLevel.standard` — see RecognitionSettingsPage.swift.
         minimumFaceWidth = defaults.object(forKey: Key.minimumFaceWidth) as? Float ?? 0.21
 
