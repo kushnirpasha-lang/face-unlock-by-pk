@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		17280C29A9398CBFDE0080BF /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 020486DA199A87C9F636359E /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,7 +39,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				17280C29A9398CBFDE0080BF /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,7 +81,6 @@
 			);
 			name = glance;
 			packageProductDependencies = (
-				020486DA199A87C9F636359E /* Sparkle */,
 			);
 			productName = glance;
 			productReference = 601C493C300FFC8400D3DE9D /* glance.app */;
@@ -114,7 +111,6 @@
 			mainGroup = 601C4933300FFC8400D3DE9D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				61D2D277C8FB856EB092125F /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 601C493D300FFC8400D3DE9D /* Products */;
@@ -182,7 +178,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = M5YR53CQW2;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -246,7 +242,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = M5YR53CQW2;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -276,7 +272,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 4;
-				DEVELOPMENT_TEAM = 99KWT739F7;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -284,15 +280,16 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = glance/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCameraUsageDescription = "glance uses the camera on-device to recognize your face for unlocking your Mac, and to let you enroll and preview your face in Settings.";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Face ID for Mac uses the camera on this Mac only, to recognize your face at the lock screen and to enroll your face. Nothing leaves the Mac.";
+				INFOPLIST_KEY_CFBundleDisplayName = "Face ID for Mac";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "by PK · based on Glance by Jonathan Zhou (MIT)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jonathan.glance;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.pavel.faceidformac;
+				PRODUCT_NAME = "Face ID for Mac";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -312,7 +309,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 4;
-				DEVELOPMENT_TEAM = 99KWT739F7;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -320,15 +317,16 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = glance/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCameraUsageDescription = "glance uses the camera on-device to recognize your face for unlocking your Mac, and to let you enroll and preview your face in Settings.";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Face ID for Mac uses the camera on this Mac only, to recognize your face at the lock screen and to enroll your face. Nothing leaves the Mac.";
+				INFOPLIST_KEY_CFBundleDisplayName = "Face ID for Mac";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "by PK · based on Glance by Jonathan Zhou (MIT)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jonathan.glance;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.pavel.faceidformac;
+				PRODUCT_NAME = "Face ID for Mac";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -363,22 +361,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		61D2D277C8FB856EB092125F /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.6.0;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		020486DA199A87C9F636359E /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 61D2D277C8FB856EB092125F /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
-		};
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 601C4934300FFC8400D3DE9D /* Project object */;

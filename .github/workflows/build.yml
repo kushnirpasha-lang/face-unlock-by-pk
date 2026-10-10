@@ -1,0 +1,83 @@
+name: build
+
+# Face ID for Mac (by PK): builds the unsigned app on a GitHub macOS runner (Xcode 26 lives there).
+# Signing happens later on Pavel's Mac with his own long-lived certificate — no secrets in this public repo.
+# Version = time of the commit: CFBundleShortVersionString YYYY.MMDD.HHMM (Kyiv, what the user sees),
+# CFBundleVersion YYYYMMDDHHMM in UTC (monotonic, immune to DST).
+
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -n "$X" ] || X=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$X"
+          xcodebuild -version
+
+      - name: Core logic tests
+        if: hashFiles('pk/Core/Package.swift') != ''
+        run: swift test --package-path pk/Core
+
+      - name: Version from commit time
+        id: ver
+        run: |
+          TS=$(git log -1 --format=%ct)
+          echo "short=$(TZ=Europe/Kyiv date -r $TS '+%Y.%m%d.%H%M' | sed -E 's/\.0*([0-9])/.\1/g')" >> $GITHUB_OUTPUT
+          echo "build=$(TZ=UTC date -r $TS '+%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+          echo "display=$(TZ=Europe/Kyiv date -r $TS '+%d.%m.%Y %H:%M')" >> $GITHUB_OUTPUT
+          echo "commit=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild -project glance.xcodeproj -target glance -configuration Release \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="${{ steps.ver.outputs.short }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
+            PK_DISPLAY_VERSION="${{ steps.ver.outputs.display }}" \
+            PK_COMMIT="${{ steps.ver.outputs.commit }}" \
+            SYMROOT="$PWD/build" build 2>&1 | tee build.log | grep -E "error:|warning: .*deprecated|\*\* BUILD" || true
+          test -d "build/Release/Face ID for Mac.app"
+
+      - name: Safety checks on the binary
+        run: |
+          APP="build/Release/Face ID for Mac.app"
+          BIN="$APP/Contents/MacOS/Face ID for Mac"
+          if otool -L "$BIN" | grep -i sparkle; then echo "Sparkle still linked"; exit 1; fi
+          if [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]; then echo "Sparkle embedded"; exit 1; fi
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" -c "Print :PKBuildDisplayVersion" "$APP/Contents/Info.plist"
+          if /usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$APP/Contents/Info.plist" 2>/dev/null; then echo "update feed present"; exit 1; fi
+
+      - name: Package
+        run: |
+          cd build/Release
+          ditto -c -k --keepParent "Face ID for Mac.app" "../../FaceIDforMac-${{ steps.ver.outputs.build }}-unsigned.zip"
+          cd ../..; shasum -a 256 FaceIDforMac-*.zip | tee SHA256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FaceIDforMac-${{ steps.ver.outputs.build }}
+          path: |
+            FaceIDforMac-*.zip
+            SHA256.txt
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-log
+          path: build.log
