@@ -1,3 +1,22 @@
+# Face ID for Mac (by PK)
+
+Personal fork of [jonnyoo/glance](https://github.com/jonnyoo/glance) (MIT) — face unlock for the owner's own MacBook.
+Original work © Jonathan Zhou, see `LICENSE`. Everything below the line is the upstream README.
+
+**What this fork changes**
+- **Adds, never replaces:** Touch ID and the password keep working at every moment. No PAM, no login plugins, no
+  event taps — the app only *listens* to input and, after a face match, types the stored password into the lock screen.
+- **Safety core** (`glance/Core`, tested with `swift test`): at most N failed attempts per lock (default 3), no scan on
+  lock, the password is typed only after a fresh check that the screen is still locked, our user is on the console and
+  nobody touched the keyboard; a wrong stored password pauses face unlock until it is saved again.
+- **No network at all:** Sparkle and the upstream update feed are removed.
+- **Password key** wrapped by a Secure Enclave key (Touch ID), so no paid Apple Team ID is needed.
+- No menu-bar icon; settings window opens from Applications. Version = commit time.
+
+Builds: GitHub Actions → workflow artifact `Face-ID-for-Mac-<version>.dmg` (ad-hoc signed).
+
+---
+
 <h1 align="center">
   <br>
   <a href="https://tryglance.app"><img src="glance/Assets.xcassets/appicon.imageset/appicon.png" alt="Glance" width="150"></a>
