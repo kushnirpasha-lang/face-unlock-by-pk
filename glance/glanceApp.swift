@@ -26,7 +26,7 @@ struct glanceApp: App {
         DispatchQueue.main.async {
             delegate.bindOpenWindowAction { open(id: "settings") }
         }
-        return Window("Glance Settings", id: "settings") {
+        return Window("Face ID for Mac", id: "settings") {
             SettingsWindowView(environment: appDelegate.environment)
                 .onAppear {
                     delegate.bindOpenWindowAction { open(id: "settings") }
@@ -72,10 +72,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Accessory before the Dock binds this launch to a persistent tile — starting `.regular` made the pinned icon bounce and
     /// get replaced by a Recents tile the moment the Dock icon was later hidden/shown.
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Face ID for Mac: exactly one running copy, and only from /Applications (see AppLifecycle).
+        if !AppLifecycle.acquireSingleInstance() {
+            if !AppLifecycle.launchedByLaunchd {
+                DistributedNotificationCenter.default().postNotificationName(
+                    AppLifecycle.showSettingsNotification, object: nil, userInfo: nil, deliverImmediately: true)
+            }
+            exit(0)
+        }
+        if !AppLifecycle.isInApplications {
+            AppLifecycle.explainWrongLocationAndQuit()
+        }
         NSApp.setActivationPolicy(.accessory)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLifecycle.ensureLaunchAgent()
+        PauseNotifier.requestPermissionIfNeeded()
+        DistributedNotificationCenter.default().addObserver(
+            forName: AppLifecycle.showSettingsNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { _ = self?.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false) }
+        }
         GlanceSettings.shared.bindMenuBarVisibility { [weak self] isVisible in
             self?.setMenuBarVisibility(isVisible)
         }

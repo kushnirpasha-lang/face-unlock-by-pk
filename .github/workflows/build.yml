@@ -62,17 +62,30 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" -c "Print :PKBuildDisplayVersion" "$APP/Contents/Info.plist"
           if /usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$APP/Contents/Info.plist" 2>/dev/null; then echo "update feed present"; exit 1; fi
 
-      - name: Package
+      - name: Sign (ad-hoc) and package DMG
+        id: pkg
         run: |
-          cd build/Release
-          ditto -c -k --keepParent "Face ID for Mac.app" "../../FaceIDforMac-${{ steps.ver.outputs.build }}-unsigned.zip"
-          cd ../..; shasum -a 256 FaceIDforMac-*.zip | tee SHA256.txt
+          set -e
+          APP="build/Release/Face ID for Mac.app"
+          # Ad-hoc signature with the hardened runtime and the camera entitlement only — no certificate or key is
+          # created or stored anywhere. Trade-off: macOS ties permissions of an ad-hoc app to this exact build, so
+          # after an update the owner re-ticks Camera / Accessibility / Input Monitoring once.
+          codesign --force --options runtime --timestamp=none --entitlements glance/glance.entitlements -s - "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          codesign -d --entitlements - "$APP" 2>/dev/null | grep -q camera
+          V="${{ steps.ver.outputs.short }}"
+          mkdir -p dmgroot && cp -R "$APP" dmgroot/ && ln -s /Applications dmgroot/Applications
+          DMG="Face-ID-for-Mac-$V.dmg"
+          hdiutil create -volname "Face ID for Mac" -srcfolder dmgroot -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
+          shasum -a 256 "$DMG" | tee SHA256.txt
+          echo "dmg=$DMG" >> $GITHUB_OUTPUT
 
+      # Delivered as a workflow artifact (download needs a signed-in GitHub account), not as a public release.
       - uses: actions/upload-artifact@v4
         with:
-          name: FaceIDforMac-${{ steps.ver.outputs.build }}
+          name: Face-ID-for-Mac-${{ steps.ver.outputs.short }}
           path: |
-            FaceIDforMac-*.zip
+            ${{ steps.pkg.outputs.dmg }}
             SHA256.txt
           retention-days: 30
 

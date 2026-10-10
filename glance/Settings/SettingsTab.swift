@@ -21,9 +21,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .general: return "General"
-        case .yourFace: return "Face"
-        case .password: return "Password"
+        case .general: return "Главная"
+        case .yourFace: return "Лицо"
+        case .password: return "Пароль"
         case .camera: return "Camera"
         case .recognition: return "Recognition"
         case .about: return "About"
@@ -48,6 +48,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     /// Tabs in tab bar order, minus `.debugFaceLab` unless it's been
     /// unlocked this launch — see `AppEnvironment.isDebugSectionRevealed`.
     static func visibleTabs(includingDebug: Bool) -> [SettingsTab] {
-        includingDebug ? allCases : allCases.filter { $0 != .debugFaceLab }
+        // Face ID for Mac: one main page + face + password (V5). Camera/recognition/about live on the main page or
+        // keep their defaults; Face Lab stays hidden behind its debug reveal.
+        let core: [SettingsTab] = [.general, .yourFace, .password]
+        return includingDebug ? core + [.debugFaceLab] : core
     }
 }
