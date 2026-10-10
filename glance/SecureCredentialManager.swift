@@ -35,6 +35,8 @@ enum SecureCredentialError: LocalizedError {
 }
 
 extension Notification.Name {
+    /// Posted after a password is stored — lifts a sticky "wrong password" pause (Face ID for Mac, A4).
+    static let secureCredentialPasswordSaved = Notification.Name("FaceIDforMac.passwordSaved")
     /// Fires whenever the cached session key changes, so anything encrypted under it (e.g. `FaceEnrollmentStore`) can reload
     /// itself instead of relying on each call site to remember to — a past bug had the sidebar's unlock forget this, leaving
     /// face unlock silently running on stale pre-unlock data.

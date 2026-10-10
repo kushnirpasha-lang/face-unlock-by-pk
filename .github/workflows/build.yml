@@ -50,8 +50,9 @@ jobs:
             CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
             PK_DISPLAY_VERSION="${{ steps.ver.outputs.display }}" \
             PK_COMMIT="${{ steps.ver.outputs.commit }}" \
-            SYMROOT="$PWD/build" build 2>&1 | tee build.log | grep -E "error:|warning: .*deprecated|\*\* BUILD" || true
-          test -d "build/Release/Face ID for Mac.app"
+            SYMROOT="$PWD/build" build 2>&1 | tee build.log | grep -E "error:|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" build.log
+          test -x "build/Release/Face ID for Mac.app/Contents/MacOS/Face ID for Mac"
 
       - name: Safety checks on the binary
         run: |
