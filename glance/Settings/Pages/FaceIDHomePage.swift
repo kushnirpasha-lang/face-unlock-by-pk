@@ -20,6 +20,24 @@ struct FaceIDHomePage: View {
             statusCard
 
             GroupBox {
+                HStack(alignment: .top, spacing: 12) {
+                    Button {
+                        Task { await coordinator.runSelfTest() }
+                    } label: {
+                        Label(coordinator.selfTestRunning ? "Смотрю…" : "Проверить сканер", systemImage: "faceid")
+                    }
+                    .controlSize(.large)
+                    .disabled(coordinator.selfTestRunning)
+                    Text(coordinator.selfTestResult ?? "Камера посмотрит на вас так же, как на экране блокировки. Мак при этом не трогается, пароль не вводится.")
+                        .font(.callout)
+                        .foregroundStyle(coordinator.selfTestPassed == true ? .green : (coordinator.selfTestPassed == false ? .orange : .secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(6)
+            }
+
+            GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle("Вход лицом", isOn: $coordinator.isEnabled)
                         .toggleStyle(.switch)
@@ -59,11 +77,11 @@ struct FaceIDHomePage: View {
             }
 
             HStack(spacing: 10) {
-                Button("Закрыть окно") { NSApp.keyWindow?.close() }
-                Button("Завершить программу", role: .destructive) { NSApp.terminate(nil) }
+                Button("Свернуть в фон") { NSApp.keyWindow?.close() }
+                Button("Выключить программу", role: .destructive) { NSApp.terminate(nil) }
                 Spacer()
             }
-            Text("«Закрыть окно» — программа продолжит работать в фоне. «Завершить программу» (или ⌘Q) — выключит её до следующего входа в систему или до запуска из «Программ». Для временной паузы — переключатель «Вход лицом». Touch ID и пароль работают всегда.")
+            Text("«Свернуть в фон» или красный крестик окна — окно спрячется, вход лицом продолжит работать. Открыть снова — кликнуть Face ID for Mac в «Программах». «Выключить программу» (или ⌘Q) — выключит её до следующего входа в систему или до запуска из «Программ». Touch ID и пароль работают всегда.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

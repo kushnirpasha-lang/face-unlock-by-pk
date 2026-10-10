@@ -48,6 +48,10 @@ final class FaceUnlockCoordinator {
     private let spoofSustain: TimeInterval = 1
 
     private(set) var statusMessage = "Ожидание"
+    /// Self-test from the settings window: the camera looks, the result is shown — nothing is typed, the Mac isn't touched.
+    private(set) var selfTestRunning = false
+    private(set) var selfTestResult: String?
+    private(set) var selfTestPassed: Bool?
     private(set) var lastOutcome: String?
 
     // MARK: Policy state
@@ -150,6 +154,7 @@ final class FaceUnlockCoordinator {
 
     private func handle(trigger: ScanTrigger) {
         syncLockState()
+        guard !selfTestRunning else { return }   // the camera is busy with the self-test
         let env = ScanEnvironment(
             isEnabled: isEnabled,
             killSwitchPresent: killSwitchPresent,
@@ -195,7 +200,7 @@ final class FaceUnlockCoordinator {
         if showsUI { NotchOverlayController.shared.beginScanning() }
         statusMessage = "Ищу лицо…"
 
-        let result = await observeScanWindow(deadline: Date().addingTimeInterval(scanWindowDuration))
+        let result = await observeScanWindow(deadline: Date().addingTimeInterval(scanWindowDuration), requireLocked: true)
         camera.stop()
         let elapsed = String(format: "%.1f с", Date().timeIntervalSince(started))
 
@@ -212,7 +217,7 @@ final class FaceUnlockCoordinator {
     }
 
     /// Recognition and liveness run concurrently; the unlock fires only when both agree.
-    private func observeScanWindow(deadline: Date) async -> ScanResult {
+    private func observeScanWindow(deadline: Date, requireLocked: Bool) async -> ScanResult {
         let livenessEnabled = GlanceSettings.shared.livenessChecksEnabled
         var liveness = LivenessAnalyzer()
         liveness.modeProvider = { GlanceSettings.shared.livenessMode }
@@ -225,7 +230,7 @@ final class FaceUnlockCoordinator {
         var sawUsableFace = false
 
         while Date() < deadline, !Task.isCancelled {
-            guard SessionFacts.current().screenLocked else { return .cancelled }
+            if requireLocked, !SessionFacts.current().screenLocked { return .cancelled }
 
             guard let frame = camera.currentFrame, frame.id != lastProcessedFrameID else {
                 try? await Task.sleep(nanoseconds: 20_000_000)
@@ -317,6 +322,63 @@ final class FaceUnlockCoordinator {
         }
         if Task.isCancelled { return .cancelled }
         return sawUsableFace ? .unconfirmed : .noFace
+    }
+
+    // MARK: - Self-test
+
+    /// «Проверить сканер»: the same recognition + liveness + frame-quality path as a real unlock, but only while the
+    /// Mac is unlocked, and it never types anything.
+    func runSelfTest() async {
+        guard !selfTestRunning, scanTask == nil else { return }
+        guard !(SessionFacts.currentOrNil()?.screenLocked ?? true) else { return }
+        guard SecureCredentialManager.isSessionUnlocked else {
+            selfTestPassed = false
+            selfTestResult = "Сначала подтвердите Touch ID: вкладка «Пароль» → разблокировать."
+            return
+        }
+        guard !FaceEnrollmentStore.shared.activeIdentities.isEmpty else {
+            selfTestPassed = false
+            selfTestResult = "Лицо ещё не записано — вкладка «Лицо»."
+            return
+        }
+        selfTestRunning = true
+        selfTestPassed = nil
+        selfTestResult = "Смотрите в камеру…"
+        lastOutcome = nil
+        let started = Date()
+        await camera.start()
+        if let error = camera.errorMessage {
+            camera.stop()
+            selfTestRunning = false
+            selfTestPassed = false
+            selfTestResult = "Камера: \(error)"
+            return
+        }
+        let result = await observeScanWindow(deadline: Date().addingTimeInterval(scanWindowDuration), requireLocked: false)
+        camera.stop()
+        selfTestRunning = false
+        let secs = String(format: "%.1f", Date().timeIntervalSince(started))
+        switch result {
+        case .matched:
+            selfTestPassed = true
+            selfTestResult = "✅ Узнал вас за \(secs) с. \(lastOutcome ?? "")"
+        case .wrongFace:
+            selfTestPassed = false
+            selfTestResult = "❌ Лицо в кадре не совпало с записанным. Попробуйте при лучшем свете или перезапишите лицо."
+        case .spoof:
+            selfTestPassed = false
+            selfTestResult = "❌ Не подтвердил, что лицо живое (\(lastOutcome ?? "блик/экран")). Уберите блики, попробуйте ещё раз."
+        case .unconfirmed:
+            selfTestPassed = false
+            selfTestResult = "⚠️ Лицо видно, но подтвердить не успел за \(secs) с. В строгом режиме моргните или слегка поверните голову."
+        case .noFace:
+            selfTestPassed = false
+            selfTestResult = "⚠️ Не увидел лица. Сядьте прямо перед камерой, 30–70 см."
+        case .cancelled:
+            selfTestPassed = nil
+            selfTestResult = "Проверка прервана."
+        }
+        EventLog.shared.add("проверка сканера", "\(result.rawValue) за \(secs) с")
     }
 
     // MARK: - Injection
