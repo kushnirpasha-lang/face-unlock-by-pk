@@ -29,8 +29,8 @@ jobs:
           xcodebuild -version
 
       - name: Core logic tests
-        if: hashFiles('pk/Core/Package.swift') != ''
-        run: swift test --package-path pk/Core
+        if: hashFiles('Package.swift') != ''
+        run: swift test
 
       - name: Version from commit time
         id: ver
