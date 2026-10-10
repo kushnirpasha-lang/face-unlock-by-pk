@@ -9,8 +9,9 @@
 //     An exclusive `flock` on a file decides; the loser asks the winner to show its window and exits(0).
 //  2. Must live in /Applications. Started from the DMG or Downloads, it explains and quits instead of installing
 //     background pieces that point at a file that will disappear.
-//  3. LaunchAgent (V3/W2). Written by the app itself on first launch from /Applications, so a manual drag-install is
-//     complete. `KeepAlive.PathState` means: if the app is deleted, launchd simply stops starting it.
+//  3. LaunchAgent (V3). Written by the app itself on first launch from /Applications, so a manual drag-install is
+//     complete. KeepAlive only on a crash. If the app is deleted without uninstall.sh, launchd fails once per login
+//     to start a missing file — harmless; uninstall.sh removes the plist.
 //
 
 import AppKit
@@ -66,7 +67,9 @@ enum AppLifecycle {
             "Label": label,
             "ProgramArguments": [executable],
             "RunAtLoad": true,
-            "KeepAlive": ["SuccessfulExit": false, "PathState": [executable: true]],
+            // Only a crash brings it back. A clean exit (⌘Q, or a second copy stepping aside) stays exited —
+            // PathState/SuccessfulExit would make launchd respawn the loser every 10 s (review finding 3).
+            "KeepAlive": ["Crashed": true],
             "ThrottleInterval": 10,
             "ProcessType": "Interactive",
             "LimitLoadToSessionType": "Aqua",
@@ -75,6 +78,9 @@ enum AppLifecycle {
         if let existing = try? Data(contentsOf: agentURL), existing == data { return }
         try? FileManager.default.createDirectory(at: agentURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard (try? data.write(to: agentURL, options: .atomic)) != nil else { return }
+        // Started by launchd itself: never boot out our own label (that would SIGTERM this very process). The new
+        // plist takes effect at the next login (review finding 4).
+        guard !launchedByLaunchd else { return }
         // Load it for this login session too. launchd will start a second copy (RunAtLoad); the single-instance lock
         // makes that copy exit(0) quietly, and from the next login on launchd is the one that starts the app.
         let uid = getuid()

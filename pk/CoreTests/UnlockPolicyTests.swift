@@ -176,4 +176,14 @@ final class UnlockPolicyTests: XCTestCase {
         XCTAssertEqual(StickyState.load(from: url).stickyPause, .injectionFailed)
         XCTAssertNil(StickyState.load(from: url.appendingPathExtension("missing")).stickyPause)
     }
+
+    func testNoSecondScanWhileInjecting() {
+        var p = lockedPolicy()
+        let g = gen(p.requestScan(.wake, env: ready, now: t0))
+        XCTAssertEqual(p.finishScan(generation: g, result: .matched), .inject)
+        XCTAssertEqual(p.requestScan(.space, env: ready, now: t0.addingTimeInterval(5)), .refuse(.scanInProgress))
+        XCTAssertEqual(p.requestScan(.wake, env: ready, now: t0.addingTimeInterval(10)), .refuse(.scanInProgress))
+        p.injectionFinished(.refused)
+        _ = gen(p.requestScan(.space, env: ready, now: t0.addingTimeInterval(11)))
+    }
 }

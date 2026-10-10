@@ -81,6 +81,11 @@ nonisolated final class InputActivityMonitor: @unchecked Sendable {
             if usage == UInt32(kHIDUsage_KeyboardSpacebar) { onSpace?() }
         case UInt32(kHIDPage_Button):
             lock.lock(); _lastPointerDown = now; lock.unlock()
+        case UInt32(kHIDPage_Digitizer):
+            // Tap-to-click on the trackpad never becomes a HID button press; a finger landing (tip switch / touch)
+            // does. The tap that woke the screen happens before the scan starts and is ignored by the guard.
+            guard usage == 0x42 || usage == 0x33 else { return }
+            lock.lock(); _lastPointerDown = now; lock.unlock()
         default:
             return   // movement, touches without a click, scroll — not "the owner is doing something"
         }

@@ -49,6 +49,8 @@ nonisolated enum InjectionResult: String, Sendable, Codable {
     case notUnlocked
     /// The guard stopped the injection part-way (someone touched the keyboard, the screen unlocked by itself, …).
     case aborted
+    /// The guard refused before anything was typed, or the password couldn't be read. Nothing reached the screen.
+    case refused
 }
 
 nonisolated enum PauseReason: String, Sendable, Codable {
@@ -100,6 +102,9 @@ nonisolated struct UnlockPolicy: Sendable {
     private(set) var transientPause: PauseReason?
     private(set) var stickyPause: PauseReason?
     private(set) var activeScan: Int?
+    /// True from a match until the injection reports back — no second scan may start meanwhile, or the password
+    /// could be typed twice (review finding 1).
+    private(set) var injectionInProgress = false
     private var generation = 0
     private var lastScanStartedAt: Date?
 
@@ -144,7 +149,7 @@ nonisolated struct UnlockPolicy: Sendable {
         guard env.vaultOpen else { return .refuse(.vaultClosed) }
         guard env.hasStoredPassword else { return .refuse(.noPassword) }
         guard env.hasEnrolledFace else { return .refuse(.noFaceEnrolled) }
-        guard activeScan == nil else { return .refuse(.scanInProgress) }
+        guard activeScan == nil, !injectionInProgress else { return .refuse(.scanInProgress) }
         if trigger == .wake, let last = lastScanStartedAt, now.timeIntervalSince(last) < wakeBurst {
             return .refuse(.wakeBurst)
         }
@@ -169,15 +174,19 @@ nonisolated struct UnlockPolicy: Sendable {
             if failedAttempts >= maxAttempts { transientPause = .attemptsExhausted }
             return .none
         }
-        if result == .matched, pause == nil { return .inject }
+        if result == .matched, pause == nil {
+            injectionInProgress = true
+            return .inject
+        }
         return .none
     }
 
     // MARK: - Injection outcome
 
     mutating func injectionFinished(_ result: InjectionResult) {
+        injectionInProgress = false
         switch result {
-        case .unlocked: break
+        case .unlocked, .refused: break
         case .notUnlocked: stickyPause = .injectionFailed
         case .aborted: transientPause = .injectionAborted
         }

@@ -25,6 +25,7 @@ final class FaceUnlockCoordinator {
     let camera = CameraManager()
     let pipeline = FaceRecognitionPipeline()
     let input = InputActivityMonitor()
+    let unlockSignal = UnlockSignal()
 
     /// Persisted. Switching off cancels any in-flight scan immediately.
     var isEnabled: Bool {
@@ -57,8 +58,6 @@ final class FaceUnlockCoordinator {
     private var scanTask: Task<Void, Never>?
     private var wakeAt: Date?
     private var scanStartedAt: Date?
-    /// The unlock notification arrived since the last observed lock — CGSession can lag after Touch ID (A8).
-    private var unlockNotifiedSinceLock = false
 
     private var showsUI: Bool { GlanceSettings.shared.showUnlockAnimation }
 
@@ -123,7 +122,6 @@ final class FaceUnlockCoordinator {
                 guard let self else { return }
                 self.observeLockAndWakeEvents()
                 let event = self.lockMonitor.lastEvent
-                if event == .screenUnlocked { self.unlockNotifiedSinceLock = true }
                 if event == .willSleep { self.cancelScan() }
                 if event == .wake { self.wakeAt = Date() }
                 // Brief settle: CGSession can lag the true state right after wake.
@@ -137,11 +135,12 @@ final class FaceUnlockCoordinator {
 
     /// Every event re-derives the lock state from CGSession (A2): a lost notification can't wedge the policy.
     private func syncLockState() {
-        let locked = SessionFacts.current().screenLocked
+        // No CGSession dictionary → observe nothing (don't fake an unlock that would reset the attempt counter).
+        guard let locked = SessionFacts.currentOrNil()?.screenLocked else { return }
         let wasLocked = policy.isLocked
         policy.observe(screenLocked: locked)
         if locked, !wasLocked {
-            unlockNotifiedSinceLock = false
+            unlockSignal.lockObserved()
             EventLog.shared.add("блокировка", "попыток: \(policy.attemptsLeft)")
         } else if !locked, wasLocked {
             cancelScan()
@@ -323,12 +322,12 @@ final class FaceUnlockCoordinator {
     // MARK: - Injection
 
     private func injectPassword() async {
-        guard let scanStartedAt else { return }
+        guard let scanStartedAt else { policy.injectionFinished(.refused); return }
         statusMessage = "Узнал — ввожу пароль…"
         let wakeAt = self.wakeAt
         let input = self.input
         let paused = policy.pause != nil
-        let unlockFlag = unlockNotifiedSinceLock
+        let unlockSignal = self.unlockSignal
         let killURL = Self.killSwitchURL
 
         let outcome: (TyperOutcome, Bool) = await Task.detached(priority: .userInitiated) {
@@ -340,7 +339,7 @@ final class FaceUnlockCoordinator {
                 let session = SessionFacts.current()
                 return GuardSnapshot(
                     cgSessionLocked: session.screenLocked,
-                    unlockNotifiedSinceLock: unlockFlag,
+                    unlockNotifiedSinceLock: unlockSignal.unlockedSinceLock,   // fresh on every call
                     sessionOnConsole: session.onConsole,
                     consoleUserIsMe: session.userIsMe,
                     inputMonitorAlive: input.isAlive,
@@ -364,7 +363,7 @@ final class FaceUnlockCoordinator {
                 policy.injectionFinished(.unlocked)
                 EventLog.shared.add("вход лицом", "успех")
                 statusMessage = "Открыто лицом"
-            } else if unlockNotifiedSinceLock {
+            } else if unlockSignal.unlockedSinceLock {
                 // Touch ID / keyboard won the race while we were typing.
                 policy.injectionFinished(.unlocked)
                 EventLog.shared.add("вход", "открыто другим способом во время ввода")
@@ -376,11 +375,13 @@ final class FaceUnlockCoordinator {
                 statusMessage = "Пароль не подошёл"
             }
         case .refusedBeforeText(let d):
+            policy.injectionFinished(.refused)
             EventLog.shared.add("ввод отменён", "до текста: \(d.rawValue)")
         case .stoppedBeforeReturn(let d):
             policy.injectionFinished(.aborted)
             EventLog.shared.add("ввод остановлен", "перед Return: \(d.rawValue) — пароль остался в поле")
         case .failed(let m):
+            policy.injectionFinished(.refused)
             EventLog.shared.add("ввод не удался", m)
         }
         syncLockState()

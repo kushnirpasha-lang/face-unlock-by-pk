@@ -72,11 +72,14 @@ nonisolated enum SessionFacts {
         var userIsMe: Bool
     }
 
-    /// Fails closed: no dictionary → "locked = false, not on console".
+    /// For the guard: fails closed — no dictionary → "not locked, not on console" → never type.
     static func current() -> Session {
-        guard let dict = CGSessionCopyCurrentDictionary() as? [String: Any] else {
-            return Session(screenLocked: false, onConsole: false, userIsMe: false)
-        }
+        currentOrNil() ?? Session(screenLocked: false, onConsole: false, userIsMe: false)
+    }
+
+    /// For state tracking: nil when CGSession can't be read, so callers don't mistake "unknown" for "unlocked".
+    static func currentOrNil() -> Session? {
+        guard let dict = CGSessionCopyCurrentDictionary() as? [String: Any] else { return nil }
         let locked = (dict["CGSSessionScreenIsLocked"] as? Bool) ?? false
         let onConsole = (dict[kCGSessionOnConsoleKey as String] as? Bool) ?? false
         let user = dict[kCGSessionUserNameKey as String] as? String
