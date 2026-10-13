@@ -23,6 +23,8 @@ nonisolated final class InputActivityMonitor: @unchecked Sendable {
 
     /// Called on the main run loop for a space-bar key-down.
     var onSpace: (@Sendable () -> Void)?
+    /// Called on the main run loop for a click or a finger landing on the trackpad (start-a-scan gesture on the lock screen).
+    var onPointerDown: (@Sendable () -> Void)?
 
     var lastKeyDown: Date? { lock.lock(); defer { lock.unlock() }; return _lastKeyDown }
     var lastPointerDown: Date? { lock.lock(); defer { lock.unlock() }; return _lastPointerDown }
@@ -85,11 +87,13 @@ nonisolated final class InputActivityMonitor: @unchecked Sendable {
             if usage == UInt32(kHIDUsage_KeyboardSpacebar) { onSpace?() }
         case UInt32(kHIDPage_Button):
             lock.lock(); _lastPointerDown = now; lock.unlock()
+            onPointerDown?()
         case UInt32(kHIDPage_Digitizer):
             // Tap-to-click on the trackpad never becomes a HID button press; a finger landing (tip switch / touch)
             // does. The tap that woke the screen happens before the scan starts and is ignored by the guard.
             guard usage == 0x42 || usage == 0x33 else { return }
             lock.lock(); _lastPointerDown = now; lock.unlock()
+            if usage == 0x42 { onPointerDown?() }   // tip switch = finger landed
         default:
             return   // movement, touches without a click, scroll — not "the owner is doing something"
         }

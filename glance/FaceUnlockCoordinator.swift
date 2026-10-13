@@ -94,6 +94,12 @@ final class FaceUnlockCoordinator {
         input.onSpace = { [weak self] in
             Task { @MainActor [weak self] in self?.handle(trigger: .space) }
         }
+        // Owner 13.10: the screen often wakes by itself (a notification), the camera finds nobody, and when he walks up
+        // later and taps the trackpad nothing happens — the screen is already awake, so there is no new wake event.
+        // A click or a finger on the trackpad on the lock screen now starts a scan too (no attempt is spent if no face).
+        input.onPointerDown = { [weak self] in
+            Task { @MainActor [weak self] in self?.handlePointerTrigger() }
+        }
         input.start()
         if !input.isAlive {
             EventLog.shared.add("мониторинг ввода", "нет разрешения — ввод пароля запрещён, пока его не дадут")
@@ -167,6 +173,19 @@ final class FaceUnlockCoordinator {
         }
     }
 
+    private var lastScanEndedAt: Date?
+    private var lastPointerTriggerAt: Date?
+
+    private func handlePointerTrigger() {
+        let now = Date()
+        // A resting or moving finger fires many events: at most one try per 2 s, and not right after a scan ended.
+        if let last = lastPointerTriggerAt, now.timeIntervalSince(last) < 2 { return }
+        lastPointerTriggerAt = now
+        if let ended = lastScanEndedAt, now.timeIntervalSince(ended) < 2 { return }
+        guard policy.isLocked || (SessionFacts.currentOrNil()?.screenLocked ?? false) else { return }
+        handle(trigger: .hover)
+    }
+
     private func handle(trigger: ScanTrigger) {
         syncLockState()
         guard !selfTestRunning else { return }   // the camera is busy with the self-test
@@ -179,6 +198,9 @@ final class FaceUnlockCoordinator {
             hasEnrolledFace: !FaceEnrollmentStore.shared.activeIdentities.isEmpty
         )
         switch policy.requestScan(trigger, env: env, now: Date()) {
+        case .refuse(let reason) where trigger == .wake && policy.isLocked:
+            EventLog.shared.add("пробуждение", "скан не запущен: \(reason.rawValue)")
+            statusMessage = "Скан не запущен: \(reason.rawValue)"
         case .refuse(let reason):
             if reason != .notLocked, reason != .wakeBurst, reason != .scanInProgress {
                 EventLog.shared.add("скан не запущен", "\(trigger.rawValue): \(reason.rawValue)")
@@ -217,6 +239,7 @@ final class FaceUnlockCoordinator {
 
         let result = await observeScanWindow(deadline: Date().addingTimeInterval(scanWindowDuration), requireLocked: true)
         camera.stop()
+        lastScanEndedAt = Date()
         let elapsed = String(format: "%.1f с", Date().timeIntervalSince(started))
 
         let next = policy.finishScan(generation: generation, result: result)
