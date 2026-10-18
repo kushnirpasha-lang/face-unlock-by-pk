@@ -43,6 +43,8 @@ final class EventLog {
         encoder.dateEncodingStrategy = .iso8601
         guard var line = try? encoder.encode(entry) else { return }
         line.append(0x0A)
+        // The folder can disappear under us (cleanup tools) — recreate it, or the journal silently stops (seen 18.10).
+        try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         rotateIfNeeded()
         if let handle = try? FileHandle(forWritingTo: fileURL) {
             handle.seekToEndOfFile()

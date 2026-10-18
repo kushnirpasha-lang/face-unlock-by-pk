@@ -16,6 +16,7 @@ import Foundation
 import CoreGraphics
 import Observation
 import ApplicationServices
+import AVFoundation
 
 @Observable
 @MainActor
@@ -105,8 +106,77 @@ final class FaceUnlockCoordinator {
             EventLog.shared.add("мониторинг ввода", "нет разрешения — ввод пароля запрещён, пока его не дадут")
         }
         observeLockAndWakeEvents()
+        startStatusFile()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)   // let login settle before the Touch ID sheet
+            self?.promptVaultIfNeeded(reason: "после запуска")
+        }
         NotificationCenter.default.addObserver(forName: .secureCredentialPasswordSaved, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.passwordWasSaved() }
+        }
+    }
+
+    // MARK: - Status file (for remote support: one glance says what's missing)
+
+    private var statusTimer: Timer?
+    private var vaultPromptInFlight = false
+
+    private func startStatusFile() {
+        writeStatusFile()
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.writeStatusFile() }
+        }
+    }
+
+    func writeStatusFile() {
+        let camera: String
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: camera = "granted"
+        case .denied: camera = "denied"
+        case .restricted: camera = "restricted"
+        case .notDetermined: camera = "not-asked"
+        @unknown default: camera = "unknown"
+        }
+        let status: [String: Any] = [
+            "at": ISO8601DateFormatter().string(from: Date()),
+            "version": AppVersion.display,
+            "enabled": isEnabled,
+            "killSwitch": killSwitchPresent,
+            "vaultOpen": SecureCredentialManager.isSessionUnlocked,
+            "vaultBackend": SecureCredentialManager.vaultBackend?.rawValue ?? "none",
+            "passwordStored": SecureCredentialManager.hasStoredPassword(),
+            "facesEnrolled": FaceEnrollmentStore.shared.activeIdentities.count,
+            "camera": camera,
+            "accessibility": AXIsProcessTrusted(),
+            "inputMonitoring": input.isAlive,
+            "screenLocked": policy.isLocked,
+            "pause": policy.pause?.rawValue ?? "none",
+            "attemptsLeft": policy.attemptsLeft,
+            "liveness": GlanceSettings.shared.livenessMode.rawValue,
+            "scanSeconds": GlanceSettings.shared.faceDetectionSeconds,
+        ]
+        let url = SecretVault.directory.appendingPathComponent("status.json")
+        if let data = try? JSONSerialization.data(withJSONObject: status, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    /// After a reboot the vault is closed until Touch ID; without it face unlock is silently dead (owner, 18.10).
+    /// Ask once — right after launch and after every unlock while it's still closed — with the system Touch ID sheet.
+    func promptVaultIfNeeded(reason: String) {
+        guard !vaultPromptInFlight, !SecureCredentialManager.isSessionUnlocked,
+              SecureCredentialManager.hasStoredPassword(), GlanceSettings.shared.hasCompletedOnboarding,
+              !(SessionFacts.currentOrNil()?.screenLocked ?? true) else { return }
+        vaultPromptInFlight = true
+        EventLog.shared.add("хранилище", "прошу Touch ID: \(reason)")
+        Task { [weak self] in
+            let ok: Bool = await Task.detached(priority: .userInitiated) {
+                (try? SecureCredentialManager.unlockSession(reason: "включить вход лицом (\(reason))")) != nil
+            }.value
+            guard let self else { return }
+            self.vaultPromptInFlight = false
+            EventLog.shared.add("хранилище", ok ? "открыто — вход лицом готов" : "Touch ID не подтверждён — вход лицом выключен до подтверждения")
+            self.writeStatusFile()
         }
     }
 
@@ -170,6 +240,7 @@ final class FaceUnlockCoordinator {
         } else if !locked, wasLocked {
             cancelScan()
             EventLog.shared.add("разблокировано", "")
+            promptVaultIfNeeded(reason: "после входа")
         }
     }
 
