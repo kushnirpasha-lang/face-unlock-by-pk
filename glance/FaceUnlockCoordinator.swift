@@ -110,6 +110,12 @@ final class FaceUnlockCoordinator {
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000)   // let login settle before the Touch ID sheet
             self?.promptVaultIfNeeded(reason: "после запуска")
+            // The camera prompt can't appear on the lock screen — ask now, while the owner is at the desktop (18.10).
+            if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
+                let granted = await AVCaptureDevice.requestAccess(for: .video)
+                EventLog.shared.add("камера", granted ? "доступ разрешён" : "доступ не дан")
+                self?.writeStatusFile()
+            }
         }
         NotificationCenter.default.addObserver(forName: .secureCredentialPasswordSaved, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.passwordWasSaved() }
