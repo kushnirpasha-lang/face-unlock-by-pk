@@ -51,14 +51,14 @@ final class FaceUnlockCoordinator {
     /// Per-scan numbers (no images, no embeddings) — shown after a self-test and written to the journal, so a failing
     /// scan says WHY: never matched, matched but liveness never confirmed, frames thrown away, …
     struct ScanStats {
-        var frames = 0, noFace = 0, partial = 0, turned = 0, lowQuality = 0, multiFace = 0
+        var frames = 0, noFace = 0, tooFar = 0, partial = 0, turned = 0, lowQuality = 0, multiFace = 0
         var used = 0, matchedFrames = 0, denyCues = 0
         var bestSimilarity: Float = -1
         var livenessConfirmed = false
 
         var summary: String {
             let sim = bestSimilarity < 0 ? "—" : String(format: "%.2f", bestSimilarity)
-            return "кадров \(frames): годных \(used), без лица \(noFace), неполное \(partial), повёрнуто \(turned), темно/смазано \(lowQuality), 2+ лица \(multiFace); совпадений \(matchedFrames), лучшее сходство \(sim); живое лицо: \(livenessConfirmed ? "да" : "нет"), признаков подделки \(denyCues)"
+            return "кадров \(frames): годных \(used), без лица \(noFace), далеко \(tooFar), неполное \(partial), повёрнуто \(turned), темно/смазано \(lowQuality), 2+ лица \(multiFace); совпадений \(matchedFrames), лучшее сходство \(sim); живое лицо: \(livenessConfirmed ? "да" : "нет"), признаков подделки \(denyCues)"
         }
     }
     private(set) var lastScanStats = ScanStats()
@@ -285,7 +285,7 @@ final class FaceUnlockCoordinator {
             statusMessage = "Скан не запущен: \(reason.rawValue)"
         case .start(let generation):
             scanStartedAt = Date()
-            EventLog.shared.add("скан", "\(trigger.rawValue), попыток осталось \(policy.attemptsLeft)")
+            EventLog.shared.add("скан", "\(trigger.rawValue), попыток осталось \(policy.attemptsLeft), камера: \(CameraDeviceCatalog.resolvedDevice()?.localizedName ?? "нет")")
             scanTask = Task { [weak self] in await self?.runScan(generation: generation) }
         }
     }
@@ -357,15 +357,22 @@ final class FaceUnlockCoordinator {
 
             let pipeline = self.pipeline
             let previousBoundingBox = lastFaceBoundingBox
-            let outcome = await Task.detached(priority: .userInitiated) { () -> (FaceRecognitionResult, LivenessFrame)? in
-                guard let result = try? pipeline.recognize(in: frame.image, preferNear: previousBoundingBox) else { return nil }
-                let faceCrop = CameraManager.renderCrop(from: frame, imageRect: result.face.boundingBox)
-                return (result, LivenessFeatureExtractor.extract(from: result, frame: frame.image, faceCrop: faceCrop))
+            let attempt = await Task.detached(priority: .userInitiated) { () -> (FaceRecognitionResult, LivenessFrame)?? in
+                do {
+                    let result = try pipeline.recognize(in: frame.image, preferNear: previousBoundingBox)
+                    let faceCrop = CameraManager.renderCrop(from: frame, imageRect: result.face.boundingBox)
+                    return .some((result, LivenessFeatureExtractor.extract(from: result, frame: frame.image, faceCrop: faceCrop)))
+                } catch FaceRecognitionPipelineError.faceTooSmall {
+                    return .some(nil)          // a face, but too far
+                } catch {
+                    return nil                 // no face at all
+                }
             }.value
 
             stats.frames += 1
+            let outcome: (FaceRecognitionResult, LivenessFrame)? = attempt ?? nil
             guard let (result, livenessFrame) = outcome else {
-                stats.noFace += 1
+                if case .some(.none) = attempt { stats.tooFar += 1 } else { stats.noFace += 1 }
                 wrongFaceStartedAt = nil
                 lastFaceBoundingBox = nil
                 readyMatch = nil

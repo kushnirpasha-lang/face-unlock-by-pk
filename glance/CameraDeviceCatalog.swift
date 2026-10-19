@@ -43,7 +43,14 @@ enum CameraDeviceCatalog {
         if let preferredID, let device = AVCaptureDevice(uniqueID: preferredID) {
             return device
         }
-        return AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+        // Face ID for Mac (owner, 19.10): with no explicit choice, never fall through to the "system default" camera —
+        // macOS hands that to Continuity Camera whenever the iPhone is near, the phone sits in a pocket, the scan sees no
+        // face for the whole window and the Mac's camera LED never lights. Prefer the Mac's own built-in camera.
+        let builtIn = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .unspecified
+        ).devices.first { $0.deviceType == .builtInWideAngleCamera }
+        return builtIn
+            ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
             ?? AVCaptureDevice.default(for: .video)
     }
 }

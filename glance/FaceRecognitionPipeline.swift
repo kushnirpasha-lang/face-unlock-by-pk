@@ -22,6 +22,8 @@ nonisolated struct FaceRecognitionResult {
 
 nonisolated enum FaceRecognitionPipelineError: LocalizedError {
     case noFaceDetected
+    /// A face was found but it's smaller than the "person at this Mac" threshold (too far, or a bystander).
+    case faceTooSmall
     case alignmentFailed
 
     var errorDescription: String? {
@@ -59,7 +61,7 @@ final class FaceRecognitionPipeline {
     nonisolated func recognize(in frame: CGImage, preferNear previousBoundingBox: CGRect? = nil) throws -> FaceRecognitionResult {
         let faces = try FaceDetector.detectFaces(in: frame)
         guard let face = Self.selectDominantFace(in: faces, preferNear: previousBoundingBox) else {
-            throw FaceRecognitionPipelineError.noFaceDetected
+            throw faces.isEmpty ? FaceRecognitionPipelineError.noFaceDetected : FaceRecognitionPipelineError.faceTooSmall
         }
         var result = try recognize(face, in: frame)
         result.prominentFaceCount = faces.filter { $0.normalizedBoundingBox.width >= CGFloat(Self.minimumProminentFaceWidth) }.count
