@@ -29,6 +29,7 @@ nonisolated enum FaceRecognitionPipelineError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noFaceDetected: return "Лицо в кадре не найдено."
+        case .faceTooSmall: return "Лицо слишком далеко от камеры."
         case .alignmentFailed: return "Не удалось выровнять найденное лицо."
         }
     }
