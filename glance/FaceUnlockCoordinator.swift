@@ -17,6 +17,7 @@ import CoreGraphics
 import Observation
 import ApplicationServices
 import AVFoundation
+import IOKit.hid
 
 @Observable
 @MainActor
@@ -111,6 +112,13 @@ final class FaceUnlockCoordinator {
             try? await Task.sleep(nanoseconds: 3_000_000_000)   // let login settle before the Touch ID sheet
             self?.promptVaultIfNeeded(reason: "после запуска")
             // The camera prompt can't appear on the lock screen — ask now, while the owner is at the desktop (18.10).
+            // Without this call a reset leaves the app absent from the Accessibility list — nothing to tick (30.10).
+            // Once per launch, only while it's missing: the system sheet points to the right switch.
+            if GlanceSettings.shared.hasCompletedOnboarding, !AXIsProcessTrusted() {
+                let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+                _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
+                EventLog.shared.add("универсальный доступ", "нет разрешения — показан системный запрос")
+            }
             if GlanceSettings.shared.hasCompletedOnboarding,
                AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
                 let granted = await AVCaptureDevice.requestAccess(for: .video)
@@ -130,9 +138,17 @@ final class FaceUnlockCoordinator {
 
     private func startStatusFile() {
         writeStatusFile()
-        statusTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.writeStatusFile() }
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reviveInputMonitorIfGranted(); self?.writeStatusFile() }
         }
+    }
+
+    /// The HID monitor opens once at launch; if Input Monitoring was granted later it stayed dead until a restart
+    /// (30.10: the owner ticked the box, the app still refused to type). Re-open it once the grant appears.
+    private func reviveInputMonitorIfGranted() {
+        guard !input.isAlive, IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted else { return }
+        input.start()
+        if input.isAlive { EventLog.shared.add("мониторинг ввода", "разрешение появилось — включён без перезапуска") }
     }
 
     func writeStatusFile() {
