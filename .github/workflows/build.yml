@@ -69,10 +69,17 @@ jobs:
           set -e
           APP="build/Release/Face ID for Mac.app"
           # Ad-hoc signature with the hardened runtime and the camera entitlement only — no certificate or key is
-          # created or stored anywhere. Trade-off: macOS ties permissions of an ad-hoc app to this exact build, so
-          # after an update the owner re-ticks Camera / Accessibility / Input Monitoring once.
-          codesign --force --options runtime --timestamp=none --entitlements glance/glance.entitlements -s - "$APP"
+          # created or stored anywhere. A plain ad-hoc signature's designated requirement is the build's cdhash, so
+          # macOS dropped Camera / Accessibility / Input Monitoring after every update (30.10 audit). An explicit
+          # identifier-only requirement is satisfied by every future build, so the grants survive updates.
+          # Trade-off: any ad-hoc binary claiming this bundle id would inherit them (single-user Mac; the password
+          # itself stays behind the Secure Enclave and Touch ID).
+          codesign --force --options runtime --timestamp=none --identifier com.pavel.faceidformac \
+            --entitlements glance/glance.entitlements \
+            -r='designated => identifier "com.pavel.faceidformac"' -s - "$APP"
           codesign --verify --strict --verbose=2 "$APP"
+          codesign -d -r- "$APP" 2>&1 | tee req.txt
+          grep -q 'designated => identifier "com.pavel.faceidformac"$' req.txt
           codesign -d --entitlements - "$APP" 2>/dev/null | grep -q camera
           V="${{ steps.ver.outputs.short }}"
           mkdir -p dmgroot && cp -R "$APP" dmgroot/ && ln -s /Applications dmgroot/Applications

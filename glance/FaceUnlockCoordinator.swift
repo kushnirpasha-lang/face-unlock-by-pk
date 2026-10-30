@@ -111,7 +111,8 @@ final class FaceUnlockCoordinator {
             try? await Task.sleep(nanoseconds: 3_000_000_000)   // let login settle before the Touch ID sheet
             self?.promptVaultIfNeeded(reason: "после запуска")
             // The camera prompt can't appear on the lock screen — ask now, while the owner is at the desktop (18.10).
-            if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
+            if GlanceSettings.shared.hasCompletedOnboarding,
+               AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
                 let granted = await AVCaptureDevice.requestAccess(for: .video)
                 EventLog.shared.add("камера", granted ? "доступ разрешён" : "доступ не дан")
                 self?.writeStatusFile()
@@ -129,7 +130,7 @@ final class FaceUnlockCoordinator {
 
     private func startStatusFile() {
         writeStatusFile()
-        statusTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.writeStatusFile() }
         }
     }
@@ -225,8 +226,14 @@ final class FaceUnlockCoordinator {
                 let event = self.lockMonitor.lastEvent
                 if event == .willSleep { self.cancelScan() }
                 if event == .wake { self.wakeAt = Date() }
-                // Brief settle: CGSession can lag the true state right after wake.
+                // Brief settle: CGSession can lag the true state right after wake — wait up to 2 s for "locked"
+                // instead of a fixed 300 ms, or the wake is refused as notLocked without a trace (30.10 audit).
                 try? await Task.sleep(nanoseconds: 300_000_000)
+                if event == .wake {
+                    for _ in 0..<9 where !(SessionFacts.currentOrNil()?.screenLocked ?? false) {
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                    }
+                }
                 self.syncLockState()
                 // Only a wake starts a scan by itself. A lock never does (A1).
                 if event == .wake { self.handle(trigger: .wake) }
@@ -276,6 +283,9 @@ final class FaceUnlockCoordinator {
         )
         switch policy.requestScan(trigger, env: env, now: Date()) {
         case .refuse(let reason) where trigger == .wake && policy.isLocked:
+            EventLog.shared.add("пробуждение", "скан не запущен: \(reason.rawValue)")
+            statusMessage = "Скан не запущен: \(reason.rawValue)"
+        case .refuse(let reason) where trigger == .wake:
             EventLog.shared.add("пробуждение", "скан не запущен: \(reason.rawValue)")
             statusMessage = "Скан не запущен: \(reason.rawValue)"
         case .refuse(let reason):

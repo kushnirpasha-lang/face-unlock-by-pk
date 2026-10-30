@@ -49,7 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Owns the long-lived controllers so every Settings page and the menu bar's session row share the same instances instead of
     /// each spinning up its own camera/lock-monitor (see AppEnvironment.swift). Lives here rather than as `@State` because
     /// `@NSApplicationDelegateAdaptor` constructs this delegate before the scene body runs, so it's always safe to read.
-    let environment = AppEnvironment()
+    /// Lazy (30.10 audit): a stored property was built with the delegate — before the single-instance and
+    /// /Applications gates — so every copy that was about to exit(0) still asked for Input Monitoring, Camera, Touch ID.
+    lazy var environment = AppEnvironment()
 
     /// Kept alive for the app's lifetime — a local variable would vanish (and the icon with it) once `applicationDidFinishLaunching` returns.
     private var statusItem: NSStatusItem?
